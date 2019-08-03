@@ -3,6 +3,10 @@ import random
 import struct
 
 
+class InvalidMessageException(Exception):
+	pass
+
+
 HEADER_FLAGS_QUERY			= 0x0000
 HEADER_FLAGS_REPLY			= 0x0001
 
@@ -22,7 +26,7 @@ HEADER_FLAGS_RESPONSE_NAME_ERROR		= 0x3000
 HEADER_FLAGS_RESPONSE_NOT_IMPLEMENTED	= 0x4000
 HEADER_FLAGS_RESPONSE_REFUSED			= 0x5000
 
-
+HEADER_SIZE = 6*2	# Six half-words
 
 class Header(object):
 	"""
@@ -46,6 +50,22 @@ class Header(object):
 							self.nameserver_count,
 							self.additional_count)
 		return(bytes)
+
+	@staticmethod
+	def unpack(bytes):
+		try:
+			h = Header()
+			(h.id,
+			 h.flags,
+			 h.question_count,
+			 h.answer_count,
+			 h.nameserver_count,
+			 h.additional_count) = struct.unpack("!HHHHHH", bytes[:HEADER_SIZE])
+			return(h, bytes[HEADER_SIZE:])
+
+		except:
+			raise InvalidMessageException()
+
 
 
 MESSAGE_MAX_SIZE = 512	# 512 bytes, section 4.2.1 of RFC 1035
@@ -79,8 +99,12 @@ class Message(object):
 		return(bytes)
 
 
-	def unpack(self):
+	@staticmethod
+	def unpack(bytes):
+		assert(bytes)
+		(self.header, remainder) = Header.unpack(bytes)
 		return
+
 
 
 QUESTION_TYPE_A		= 1		# Host address

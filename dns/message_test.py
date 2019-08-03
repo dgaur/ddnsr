@@ -15,6 +15,16 @@ class MessageTest(unittest.TestCase):
 		return
 
 
+	def test_header_roundtrip(self):
+		h1 = message.Header(question_count=5)
+		bytes = h1.pack()
+		(h2, remainder) = message.Header.unpack(bytes)
+		assert(h1.id == h2.id)
+		assert(h1.question_count == h2.question_count)
+		assert(len(remainder) == 0)
+		return
+
+
 	def test_label_packing(self):
 		q = message.Question()
 		assert(q.pack_label("www") == b"\03www")
