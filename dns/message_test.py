@@ -32,6 +32,14 @@ class MessageTest(unittest.TestCase):
 		return
 
 
+	def test_label_unpacking(self):
+		q = message.Question()
+		(label, remainder) = q.unpack_label(b"\03www\06google")
+		assert(label == "www")
+		assert(len(remainder) == 1+6)
+		return
+
+
 	def test_message_packing(self):
 		m1 = message.Message(name="www.google.com")
 		assert(m1.header.question_count == 1)

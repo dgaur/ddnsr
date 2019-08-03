@@ -152,4 +152,11 @@ class Question(object):
 		qname = b"".join(packed_labels)
 		return struct.pack("!%dsHH" % len(qname), qname, self.type, self.qclass)
 
-
+	@staticmethod
+	def unpack_label(bytes):
+		try:
+			(label,) = struct.unpack("!%dp" % len(bytes), bytes)
+			remainder = bytes[ 1 + len(label): ] # length byte + label bytes
+			return(label.decode("utf8"), remainder)
+		except:
+			raise InvalidMessageException("Invalid label")
