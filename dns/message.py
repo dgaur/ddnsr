@@ -7,6 +7,10 @@ class InvalidMessageException(Exception):
 	pass
 
 
+def cat(*details):
+	return "\n".join(details)
+
+
 HEADER_FLAGS_QUERY			= 0x0000
 HEADER_FLAGS_REPLY			= 0x0001
 
@@ -50,6 +54,14 @@ class Header(object):
 							self.nameserver_count,
 							self.additional_count)
 		return(bytes)
+
+	def __str__(self):
+		return cat("Header:",
+			"  id:		  %#02x" % self.id,
+			"  flags:	  %#02x" % self.flags,
+			"  questions: %d" % self.question_count,
+			"  answers:	  %d" % self.answer_count)
+
 
 	@staticmethod
 	def unpack(bytes):
@@ -99,11 +111,16 @@ class Message(object):
 		return(bytes)
 
 
+	def __str__(self):
+		return "".join(str(field) for field in [self.header])
+
+
 	@staticmethod
 	def unpack(bytes):
 		assert(bytes)
-		(self.header, remainder) = Header.unpack(bytes)
-		return
+		m = Message()
+		(m.header, remainder) = Header.unpack(bytes)
+		return m
 
 
 

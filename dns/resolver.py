@@ -15,16 +15,19 @@ class Resolver(object):
 		return
 		
 	def query(self, name, server):
-		m = dns.message.Message(name)
-		host = (server, DNS_PORT)
+		request = dns.message.Message(name)
+		destination = (server, DNS_PORT)
 
 		# Send the initial query
-		self.sock.sendto(m.pack(), host)
+		self.sock.sendto(request.pack(), destination)
 
 		# Wait for the response
 		self.sock.settimeout(2.0)
-		(bytes, address) = self.sock.recvfrom(dns.message.MESSAGE_MAX_SIZE)
+		(bytes, source) = self.sock.recvfrom(dns.message.MESSAGE_MAX_SIZE)
 		print(bytes)
+		response = dns.message.Message.unpack(bytes)
+		assert(request.header.id == response.header.id)
+		print(response)
 		
 		return
 
