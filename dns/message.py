@@ -5,7 +5,7 @@ import struct
 
 
 #
-# INTERNAL UTILITY ROUTINES
+# INTERNAL UTILITY ROUTINES ###############################################
 #
 
 class InvalidMessageException(Exception):
@@ -34,7 +34,7 @@ def decode_one(value, decoder):
 
 
 #
-# DOMAIN NAME
+# DOMAIN NAME/LABELS ######################################################
 #
 
 class DomainName(object):
@@ -43,6 +43,10 @@ class DomainName(object):
 		return
 
 	def pack(self):
+		"""
+		Pack a DNS name into a byte-string suitable for a Question or RR.
+		Returns the packed name.  No side effects.
+		"""
 		null_label = ""
 		labels = self.name.split(".") + [ null_label ]
 		packed_labels = [ self.pack_label(label) for label in labels ]
@@ -51,7 +55,7 @@ class DomainName(object):
 
 	def pack_label(self, label):
 		"""
-		Pack a single DNS label into a bytesstring suitable for a
+		Pack a single DNS label into a byte-string suitable for a
 		Question or RR.	 Returns the packed label string.
 		No side effects.
 
@@ -66,6 +70,10 @@ class DomainName(object):
 
 	@staticmethod
 	def unpack(bytes):
+		"""
+		Unpack a single DNS name from a string of bytes.
+		Returns (DomainName, remaining-bytes)
+		"""
 		remainder = bytes
 
 		# Unpack the entire domain name, piece-by-piece
@@ -93,6 +101,10 @@ class DomainName(object):
 			raise InvalidMessageException("Invalid label")
 
 
+
+#
+# DNS MESSAGE HEADER ######################################################
+#
 
 
 HEADER_FLAGS_QUERY			= 0x0000
@@ -182,6 +194,10 @@ class Header(object):
 
 
 
+#
+# ACTUAL DNS MESSAGE ######################################################
+#
+
 MESSAGE_MAX_SIZE = 512	# 512 bytes, section 4.2.1 of RFC 1035
 
 class Message(object):
@@ -232,6 +248,11 @@ class Message(object):
 
 		return m
 
+
+
+#
+# "QUESTION" STRUCTURE WITHIN DNS MESSAGE #################################
+#
 
 
 QUESTION_TYPE_A		= 1		# Host address
@@ -287,7 +308,10 @@ class Question(object):
 
 	@staticmethod
 	def unpack(bytes):
-		"""Unpack a single question.  Returns (unpacked-question, remaining-bytes)"""
+		"""
+		Unpack a single question from a string of bytes.
+		Returns (Question, remaining-bytes)
+		"""
 		try:
 			q = Question()
 			(q.name, remainder) = DomainName.unpack(bytes)
