@@ -8,27 +8,28 @@ class InvalidMessageException(Exception):
 
 
 def cat(*details):
+	"""Convenience routine for concatenating multi-line fields"""
 	return "\n".join(details)
 
 
 HEADER_FLAGS_QUERY			= 0x0000
-HEADER_FLAGS_REPLY			= 0x0001
+HEADER_FLAGS_REPLY			= 0x8000
 
 HEADER_FLAGS_OPCODE_QUERY	= 0x0000
 HEADER_FLAGS_OPCODE_IQUERY	= 0x0000 #@@
 HEADER_FLAGS_OPCODE_STATUS	= 0x0000 #@@
 
-HEADER_FLAGS_AUTHORITATIVE_ANSWER	= 0x0020
-HEADER_FLAGS_TRUNCATED				= 0x0040
-HEADER_FLAGS_RECURSION_DESIRED		= 0x0080
-HEADER_FLAGS_RECURSION_AVAILABLE	= 0x0100
+HEADER_FLAGS_AUTHORITATIVE_ANSWER	= 0x0400
+HEADER_FLAGS_TRUNCATED				= 0x0200
+HEADER_FLAGS_RECURSION_DESIRED		= 0x0100
+HEADER_FLAGS_RECURSION_AVAILABLE	= 0x0080
 
 HEADER_FLAGS_RESPONSE_SUCCESS			= 0x0000
-HEADER_FLAGS_RESPONSE_FORMAT_ERROR		= 0x1000
-HEADER_FLAGS_RESPONSE_SERVER_ERROR		= 0x2000
-HEADER_FLAGS_RESPONSE_NAME_ERROR		= 0x3000
-HEADER_FLAGS_RESPONSE_NOT_IMPLEMENTED	= 0x4000
-HEADER_FLAGS_RESPONSE_REFUSED			= 0x5000
+HEADER_FLAGS_RESPONSE_FORMAT_ERROR		= 0x0001
+HEADER_FLAGS_RESPONSE_SERVER_ERROR		= 0x0002
+HEADER_FLAGS_RESPONSE_NAME_ERROR		= 0x0003
+HEADER_FLAGS_RESPONSE_NOT_IMPLEMENTED	= 0x0004
+HEADER_FLAGS_RESPONSE_REFUSED			= 0x0005
 
 HEADER_SIZE = 6*2	# Six half-words
 
@@ -57,10 +58,10 @@ class Header(object):
 
 	def __str__(self):
 		return cat("Header:",
-			"  id:		  %#02x" % self.id,
-			"  flags:	  %#02x" % self.flags,
+			"  id:        %#02x" % self.id,
+			"  flags:     %#02x" % self.flags,
 			"  questions: %d" % self.question_count,
-			"  answers:	  %d" % self.answer_count)
+			"  answers:   %d" % self.answer_count)
 
 
 	@staticmethod
@@ -99,27 +100,35 @@ class Message(object):
 		self.header = Header(question_count=len(self.question))
 		return
 
+	def fields(self):
+		"""List of message fields, in order of packet layout"""
+		return [ self.header ] + self.question
 
 	def pack(self):
 		"""
 		Pack this message into a single bytestring, suitable
 		for transmission.  Returns bytestring.  No side effects
 		"""
-		fields = [ self.header ] + self.question
-		bytes = b"".join(field.pack() for field in fields)
+		bytes = b"".join(field.pack() for field in self.fields())
 		assert(len(bytes) <= MESSAGE_MAX_SIZE)
 		return(bytes)
 
 
 	def __str__(self):
-		return "".join(str(field) for field in [self.header])
+		return "\n".join(str(field) for field in self.fields())
 
 
 	@staticmethod
 	def unpack(bytes):
 		assert(bytes)
+		assert(len(bytes) <= MESSAGE_MAX_SIZE)
+
 		m = Message()
 		(m.header, remainder) = Header.unpack(bytes)
+		for i in range(m.header.question_count):
+			(question, remainder) = Question.unpack(remainder)
+			m.question.append(question)
+
 		return m
 
 
@@ -127,11 +136,25 @@ class Message(object):
 QUESTION_TYPE_A		= 1		# Host address
 QUESTION_TYPE_NS	= 2		# Name server
 
+QUESTION_TYPE_DECODER = {
+	QUESTION_TYPE_A:	"QTYPE_A",
+	QUESTION_TYPE_NS:	"QTYPE_NS"
+}
+
+
 QUESTION_CLASS_IN	= 1		# Internet
 QUESTION_CLASS_CS	= 2		# CSNET, obsolete
 QUESTION_CLASS_CH	= 3		# Chaos
 QUESTION_CLASS_HS	= 4		# Hesiod
 QUESTION_CLASS_ANY	= 255	# Any
+
+QUESTION_CLASS_DECODER = {
+	QUESTION_CLASS_IN:	"QCLASS_IN",
+	QUESTION_CLASS_CS:	"QCLASS_CS",
+	QUESTION_CLASS_CH:	"QCLASS_CH",
+	QUESTION_CLASS_HS:	"QCLASS_HS",
+	QUESTION_CLASS_ANY:	"QCLASS_ANY"
+}
 
 
 class Question(object):
@@ -168,6 +191,42 @@ class Question(object):
 		packed_labels = [ self.pack_label(label) for label in labels ]
 		qname = b"".join(packed_labels)
 		return struct.pack("!%dsHH" % len(qname), qname, self.type, self.qclass)
+
+	def __str__(self):
+		return cat("Question:",
+			"  label:     %s" % self.name,
+			"  type:      %#02x (%s)" % (self.type, QUESTION_TYPE_DECODER[self.type]),
+			"  class:     %#02x (%s)" % (self.qclass, QUESTION_CLASS_DECODER[self.qclass]))
+
+
+	@staticmethod
+	def unpack(bytes):
+		"""Unpack a single question.  Returns (unpacked-question, remaining-bytes)"""
+		try:
+			q = Question()
+			remainder = bytes
+
+			# Unpack the entire domain name, piece-by-piece
+			labels = []
+			while True:
+				(label, remainder) = Question.unpack_label(remainder)
+				if (len(label) > 0):
+					labels.append(label)
+				else:
+					break
+			assert(len(labels) > 0)
+
+			# Compute the complete name, from the individual labels
+			q.name = ".".join(labels)
+
+			(q.type, q.qclass) = struct.unpack("!HH", remainder[:4])
+			return(q, remainder[4:])
+
+		except InvalidMessageException:
+			raise
+		except:
+			raise InvalidMessageException("Invalid question")
+
 
 	@staticmethod
 	def unpack_label(bytes):
