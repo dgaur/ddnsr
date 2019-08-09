@@ -3,6 +3,11 @@ import random
 import struct
 
 
+
+#
+# INTERNAL UTILITY ROUTINES
+#
+
 class InvalidMessageException(Exception):
 	pass
 
@@ -24,6 +29,70 @@ def decode_one(value, decoder):
 		return decoder[value]
 	except:
 		return "Unknown (%#x)" % value
+
+
+
+
+#
+# DOMAIN NAME
+#
+
+class DomainName(object):
+	def __init__(self, name=""):
+		self.name = name
+		return
+
+	def pack(self):
+		null_label = ""
+		labels = self.name.split(".") + [ null_label ]
+		packed_labels = [ self.pack_label(label) for label in labels ]
+		qname = b"".join(packed_labels)
+		return(qname)
+
+	def pack_label(self, label):
+		"""
+		Pack a single DNS label into a bytesstring suitable for a
+		Question or RR.	 Returns the packed label string.
+		No side effects.
+
+		pack_label("www") => b"\03www"
+		pack_label("google") => b"\06google"
+		pack_label("") => b"\00"
+		"""
+		return struct.pack("!%dp" % (len(label) + 1), bytes(label, "ascii"))
+
+	def __str__(self):
+		return self.name
+
+	@staticmethod
+	def unpack(bytes):
+		remainder = bytes
+
+		# Unpack the entire domain name, piece-by-piece
+		labels = []
+		while True:
+			(label, remainder) = DomainName.unpack_label(remainder)
+			if (len(label) > 0):
+				labels.append(label)
+			else:
+				break
+		assert(len(labels) > 0)
+
+		# Compute the complete name, from the individual labels
+		name = ".".join(labels)
+
+		return (DomainName(name), remainder)
+
+	@staticmethod
+	def unpack_label(bytes):
+		try:
+			(label,) = struct.unpack("!%dp" % len(bytes), bytes)
+			remainder = bytes[ 1 + len(label): ] # length byte + label bytes
+			return(label.decode("utf8"), remainder)
+		except:
+			raise InvalidMessageException("Invalid label")
+
+
 
 
 HEADER_FLAGS_QUERY			= 0x0000
@@ -195,22 +264,10 @@ class Question(object):
 	"""
 
 	def __init__(self, name="", type=QUESTION_TYPE_A, qclass=QUESTION_CLASS_IN):
-		self.name = name
+		self.name = DomainName(name)
 		self.type = type
 		self.qclass = qclass
 		return
-
-	def pack_label(self, label):
-		"""
-		Pack a single DNS label into a bytesstring suitable for a
-		Question or RR.	 Returns the packed label string.
-		No side effects.
-
-		pack_label("www") => b"\03www"
-		pack_label("google") => b"\06google"
-		pack_label("") => b"\00"
-		"""
-		return struct.pack("!%dp" % (len(label) + 1), bytes(label, "ascii"))
 
 	def pack(self):
 		"""
@@ -218,10 +275,7 @@ class Question(object):
 		a DNS message.	Returns the packed Question string.
 		No side effects
 		"""
-		null_label = ""
-		labels = self.name.split(".") + [ null_label ]
-		packed_labels = [ self.pack_label(label) for label in labels ]
-		qname = b"".join(packed_labels)
+		qname = self.name.pack()
 		return struct.pack("!%dsHH" % len(qname), qname, self.type, self.qclass)
 
 	def __str__(self):
@@ -236,21 +290,7 @@ class Question(object):
 		"""Unpack a single question.  Returns (unpacked-question, remaining-bytes)"""
 		try:
 			q = Question()
-			remainder = bytes
-
-			# Unpack the entire domain name, piece-by-piece
-			labels = []
-			while True:
-				(label, remainder) = Question.unpack_label(remainder)
-				if (len(label) > 0):
-					labels.append(label)
-				else:
-					break
-			assert(len(labels) > 0)
-
-			# Compute the complete name, from the individual labels
-			q.name = ".".join(labels)
-
+			(q.name, remainder) = DomainName.unpack(bytes)
 			(q.type, q.qclass) = struct.unpack("!HH", remainder[:4])
 			return(q, remainder[4:])
 
@@ -260,11 +300,3 @@ class Question(object):
 			raise InvalidMessageException("Invalid question")
 
 
-	@staticmethod
-	def unpack_label(bytes):
-		try:
-			(label,) = struct.unpack("!%dp" % len(bytes), bytes)
-			remainder = bytes[ 1 + len(label): ] # length byte + label bytes
-			return(label.decode("utf8"), remainder)
-		except:
-			raise InvalidMessageException("Invalid label")

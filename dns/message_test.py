@@ -11,7 +11,7 @@ class MessageTest(unittest.TestCase):
 		assert(len(bytes) == 6*2)
 
 		# Ignore id field.	Expect RECURSION_DESIRED + 3 questions
-		assert(bytes[2:] == b"\x00\x80\x00\x03\x00\x00\x00\x00\x00\x00")
+		assert(bytes[2:] == b"\x01\x00\x00\x03\x00\x00\x00\x00\x00\x00")
 		return
 
 
@@ -26,15 +26,15 @@ class MessageTest(unittest.TestCase):
 
 
 	def test_label_packing(self):
-		q = message.Question()
-		assert(q.pack_label("www") == b"\03www")
-		assert(q.pack_label("") == b"\00")
+		n = message.DomainName()
+		assert(n.pack_label("www") == b"\03www")
+		assert(n.pack_label("") == b"\00")
 		return
 
 
 	def test_label_unpacking(self):
-		q = message.Question()
-		(label, remainder) = q.unpack_label(b"\03www\06google")
+		n = message.DomainName()
+		(label, remainder) = n.unpack_label(b"\03www\06google")
 		assert(label == "www")
 		assert(len(remainder) == 1+6)
 		return
@@ -50,6 +50,18 @@ class MessageTest(unittest.TestCase):
 		assert(len(m2.pack()) < message.MESSAGE_MAX_SIZE)
 		return
 
+
+	def test_name_packing(self):
+		n = message.DomainName("www.amazon.com")
+		assert(n.pack() == b"\03www\06amazon\03com\0")
+		return
+
+
+	def test_name_unpacking(self):
+		(n, remainder) = message.DomainName.unpack(b"\03www\06amazon\03com\0\xFF\xFF")
+		assert(str(n) == "www.amazon.com")
+		assert(remainder == b"\xFF\xFF")
+		return
 
 	def test_question_packing(self):
 		q = message.Question("www.google.com")
