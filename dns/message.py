@@ -12,12 +12,26 @@ def cat(*details):
 	return "\n".join(details)
 
 
+def decode_all(mask, decoder):
+	"""Safely decode a mask to its string equivalent"""
+	result = [ v for (k,v) in decoder.items() if bool(k & mask) ]
+	return ", ".join(result)
+
+
+def decode_one(value, decoder):
+	"""Safely decode a single value to its string equivalent"""
+	try:
+		return decoder[value]
+	except:
+		return "Unknown (%#x)" % value
+
+
 HEADER_FLAGS_QUERY			= 0x0000
 HEADER_FLAGS_REPLY			= 0x8000
 
 HEADER_FLAGS_OPCODE_QUERY	= 0x0000
-HEADER_FLAGS_OPCODE_IQUERY	= 0x0000 #@@
-HEADER_FLAGS_OPCODE_STATUS	= 0x0000 #@@
+HEADER_FLAGS_OPCODE_IQUERY	= 0x0800
+HEADER_FLAGS_OPCODE_STATUS	= 0x1000
 
 HEADER_FLAGS_AUTHORITATIVE_ANSWER	= 0x0400
 HEADER_FLAGS_TRUNCATED				= 0x0200
@@ -30,6 +44,24 @@ HEADER_FLAGS_RESPONSE_SERVER_ERROR		= 0x0002
 HEADER_FLAGS_RESPONSE_NAME_ERROR		= 0x0003
 HEADER_FLAGS_RESPONSE_NOT_IMPLEMENTED	= 0x0004
 HEADER_FLAGS_RESPONSE_REFUSED			= 0x0005
+
+HEADER_FLAGS_DECODER = {
+	HEADER_FLAGS_QUERY:					"MESSAGE_QUERY",
+	HEADER_FLAGS_REPLY:					"MESSAGE_REPLY",
+	HEADER_FLAGS_OPCODE_QUERY:			"OPCODE_QUERY",
+	HEADER_FLAGS_OPCODE_IQUERY:			"OPCODE_IQUERY",
+	HEADER_FLAGS_OPCODE_STATUS:			"OPCODE_STATUS",
+	HEADER_FLAGS_AUTHORITATIVE_ANSWER:	"AUTHORITATIVE",
+	HEADER_FLAGS_TRUNCATED:				"TRUNCATED",
+	HEADER_FLAGS_RECURSION_DESIRED:		"RECURSION_DESIRED",
+	HEADER_FLAGS_RECURSION_AVAILABLE:	"RECURSION_AVAILABLE",
+	HEADER_FLAGS_RESPONSE_SUCCESS:		"RESPONSE_SUCCESS",
+	HEADER_FLAGS_RESPONSE_FORMAT_ERROR:	"RESPONSE_FORMAT_ERROR",
+	HEADER_FLAGS_RESPONSE_SERVER_ERROR:	"RESPONSE_SERVER_ERROR",
+	HEADER_FLAGS_RESPONSE_NAME_ERROR:	"RESPONSE_NAME_ERROR",
+	HEADER_FLAGS_RESPONSE_NOT_IMPLEMENTED: "RESPONSE_NOT_IMPLEMENTED",
+	HEADER_FLAGS_RESPONSE_REFUSED:		"RESPONSE_REFUSED"
+}
 
 HEADER_SIZE = 6*2	# Six half-words
 
@@ -59,7 +91,7 @@ class Header(object):
 	def __str__(self):
 		return cat("Header:",
 			"  id:        %#02x" % self.id,
-			"  flags:     %#02x" % self.flags,
+			"  flags:     %#02x (%s)" % (self.flags, decode_all(self.flags, HEADER_FLAGS_DECODER)),
 			"  questions: %d" % self.question_count,
 			"  answers:   %d" % self.answer_count)
 
@@ -195,8 +227,8 @@ class Question(object):
 	def __str__(self):
 		return cat("Question:",
 			"  label:     %s" % self.name,
-			"  type:      %#02x (%s)" % (self.type, QUESTION_TYPE_DECODER[self.type]),
-			"  class:     %#02x (%s)" % (self.qclass, QUESTION_CLASS_DECODER[self.qclass]))
+			"  type:      %#02x (%s)" % (self.type, decode_one(self.type, QUESTION_TYPE_DECODER)),
+			"  class:     %#02x (%s)" % (self.qclass, decode_one(self.qclass, QUESTION_CLASS_DECODER)))
 
 
 	@staticmethod
