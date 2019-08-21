@@ -251,45 +251,125 @@ class Message(object):
 
 
 #
+# "RESOURCE RECORD" (RR) STRUCTURE WITHIN DNS MESSAGE #####################
+#
+
+
+RESOURCE_TYPE_A		= 1		# Host address
+RESOURCE_TYPE_NS	= 2		# Name server
+RESOURCE_TYPE_MD	= 3		# Mail destination (obsolete)
+RESOURCE_TYPE_MF	= 4		# Mail forwarder (obsolete)
+RESOURCE_TYPE_CNAME	= 5		# Canonical name
+RESOURCE_TYPE_SOA	= 6		# Start of zone of authority
+
+
+
+RESOURCE_TYPE_DECODER = {
+	RESOURCE_TYPE_A:	"RTYPE_A",
+	RESOURCE_TYPE_NS:	"RTYPE_NS",
+	RESOURCE_TYPE_MD:	"RTYPE_MD",
+	RESOURCE_TYPE_MF:	"RTYPE_MF",
+	RESOURCE_TYPE_CNAME:"RTYPE_CNAME",
+	RESOURCE_TYPE_SOA:	"RTYPE_SOA",
+
+}
+
+
+RESOURCE_CLASS_IN	= 1		# Internet
+RESOURCE_CLASS_CS	= 2		# CSNET, obsolete
+RESOURCE_CLASS_CH	= 3		# Chaos
+RESOURCE_CLASS_HS	= 4		# Hesiod
+RESOURCE_CLASS_ANY	= 255	# Any
+
+RESOURCE_CLASS_DECODER = {
+	RESOURCE_CLASS_IN:	"QCLASS_IN",
+	RESOURCE_CLASS_CS:	"QCLASS_CS",
+	RESOURCE_CLASS_CH:	"QCLASS_CH",
+	RESOURCE_CLASS_HS:	"QCLASS_HS",
+	RESOURCE_CLASS_ANY:	"QCLASS_ANY"
+}
+
+
+class ResourceRecord(object):
+	"""
+	Resource Record (RR) structure
+	"""
+
+	def __init__(self, name="", type=RESOURCE_TYPE_A, rclass=RESOURCE_CLASS_IN,
+				 ttl=0, resource=""):
+		self.name		= DomainName(name)
+		self.type		= type
+		self.rclass		= rclass
+		self.ttl		= ttl
+		self.resource	= resource
+		return
+
+	def pack(self):
+		"""
+		Packs a RR into a bytestring suitable for a DNS message.
+		Returns the packed RR string.  No side effects
+		"""
+		rname = self.name.pack()
+		resource_length = len(self.resource)
+		return struct.pack("!%dsHHlH%ds" % (len(rname), resource_length),
+			rname,
+			self.type,
+			self.rclass,
+			self.ttl,
+			resource_length,
+			self.resource)
+
+	def __str__(self):
+		return cat("Resource:",
+			"  name:      %s" % self.name,
+			"  type:      %#02x (%s)" % (self.type, decode_one(self.type, RESOURCE_TYPE_DECODER)),
+			"  class:     %#02x (%s)" % (self.rclass, decode_one(self.rclass, RESOURCE_CLASS_DECODER)),
+			"  TTL:       %d seconds" % (self.ttl))
+
+
+	@staticmethod
+	def unpack(bytes):
+		"""
+		Unpack a single RR from a string of bytes.
+		Returns (ResourceRecord, remaining-bytes)
+		"""
+		try:
+			rr = ResourceRecord()
+
+			# Unpack the DNS name
+			(rr.name, remainder) = DomainName.unpack(bytes)
+
+			# Unpack the fixed fields up to the actual resource bytes
+			resource_offset = 2+2+4+2
+			(rr.type, rr.rclass, rr.ttl, resource_length) = \
+				struct.unpack("!HHlH", remainder[:resource_offset])
+
+			# Unpack the resource bytes
+			remainder = remainder[resource_offset:]
+			(rr.resource,) = struct.unpack("!%ds" % resource_length,
+				remainder[:resource_length])
+			return(rr, remainder[resource_length:])
+
+		except InvalidMessageException:
+			raise
+		except:
+			raise InvalidMessageException("Invalid ResourceRecord(RR)")
+
+
+
+#
 # "QUESTION" STRUCTURE WITHIN DNS MESSAGE #################################
 #
 
 
-QUESTION_TYPE_A		= 1		# Host address
-QUESTION_TYPE_NS	= 2		# Name server
-
-QUESTION_TYPE_DECODER = {
-	QUESTION_TYPE_A:	"QTYPE_A",
-	QUESTION_TYPE_NS:	"QTYPE_NS"
-}
-
-
-QUESTION_CLASS_IN	= 1		# Internet
-QUESTION_CLASS_CS	= 2		# CSNET, obsolete
-QUESTION_CLASS_CH	= 3		# Chaos
-QUESTION_CLASS_HS	= 4		# Hesiod
-QUESTION_CLASS_ANY	= 255	# Any
-
-QUESTION_CLASS_DECODER = {
-	QUESTION_CLASS_IN:	"QCLASS_IN",
-	QUESTION_CLASS_CS:	"QCLASS_CS",
-	QUESTION_CLASS_CH:	"QCLASS_CH",
-	QUESTION_CLASS_HS:	"QCLASS_HS",
-	QUESTION_CLASS_ANY:	"QCLASS_ANY"
-}
-
-
-class Question(object):
+# Treat Questions as a specialized form of RR.  Override packing methods as
+# necessary to ignore the unused RR fields
+class Question(ResourceRecord):
 	"""
-	Question section of a DNS query
+	Question section of a DNS query.
 	"""
 
-	def __init__(self, name="", type=QUESTION_TYPE_A, qclass=QUESTION_CLASS_IN):
-		self.name = DomainName(name)
-		self.type = type
-		self.qclass = qclass
-		return
-
+	# OVerride the default RR.pack() behavior here
 	def pack(self):
 		"""
 		Packs a Question into a bytestring suitable for a
@@ -297,15 +377,17 @@ class Question(object):
 		No side effects
 		"""
 		qname = self.name.pack()
-		return struct.pack("!%dsHH" % len(qname), qname, self.type, self.qclass)
+		return struct.pack("!%dsHH" % len(qname), qname, self.type, self.rclass)
 
+	# OVerride the default RR behavior here
 	def __str__(self):
 		return cat("Question:",
 			"  label:     %s" % self.name,
-			"  type:      %#02x (%s)" % (self.type, decode_one(self.type, QUESTION_TYPE_DECODER)),
-			"  class:     %#02x (%s)" % (self.qclass, decode_one(self.qclass, QUESTION_CLASS_DECODER)))
+			"  type:      %#02x (%s)" % (self.type, decode_one(self.type, RESOURCE_TYPE_DECODER)),
+			"  class:     %#02x (%s)" % (self.qclass, decode_one(self.rclass, RESOURCE_CLASS_DECODER)))
 
 
+	# OVerride the default RR.unpack() behavior here
 	@staticmethod
 	def unpack(bytes):
 		"""
@@ -315,12 +397,13 @@ class Question(object):
 		try:
 			q = Question()
 			(q.name, remainder) = DomainName.unpack(bytes)
-			(q.type, q.qclass) = struct.unpack("!HH", remainder[:4])
+			(q.type, q.rclass) = struct.unpack("!HH", remainder[:4])
 			return(q, remainder[4:])
 
 		except InvalidMessageException:
 			raise
 		except:
 			raise InvalidMessageException("Invalid question")
+
 
 

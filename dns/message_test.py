@@ -25,6 +25,16 @@ class MessageTest(unittest.TestCase):
 		return
 
 
+	def test_invalid_message(self):
+		self.assertRaises(message.InvalidMessageException,
+			message.Message.unpack, b"\00\00\00\00")
+		self.assertRaises(message.InvalidMessageException,
+			message.Message.unpack, b"\FF\FF\FF\FF")
+		self.assertRaises(message.InvalidMessageException,
+			message.Message.unpack, b"\00")
+		return
+
+
 	def test_label_packing(self):
 		n = message.DomainName()
 		assert(n.pack_label("www") == b"\03www")
@@ -66,6 +76,29 @@ class MessageTest(unittest.TestCase):
 	def test_question_packing(self):
 		q = message.Question("www.google.com")
 		assert(q.pack() == b"\03www\06google\03com\00\00\01\00\01")
+		return
+
+	def test_question_unpacking(self):
+		(q, remainder) = message.Question.unpack(b"\03www\06google\03com\00\00\01\00\01\xFF\xFF")
+		assert(len(remainder) == 2)
+		assert(str(q.name) == "www.google.com")
+		return
+
+	def test_resource_packing(self):
+		rr = message.ResourceRecord(name="www.google.com", ttl=0x11,
+			resource=b"\xAA\xBB\xCC\xDD")
+		assert(rr.pack() == b"\03www\06google\03com\00\00\01\00\01\00\00\00\x11\00\04\xAA\xBB\xCC\xDD")
+		return
+
+
+	def test_resource_unpacking(self):
+		(rr, remainder) = message.ResourceRecord.unpack(b"\03www\06google\03com\00\00\01\00\01\00\00\00\x11\00\04\xAA\xBB\xCC\xDD\xFF\xFF")
+		assert(len(remainder) == 2)
+		assert(str(rr.name) == "www.google.com")
+		assert(len(rr.resource) == 4)
+		assert(rr.ttl == 0x11)
+		return
+
 
 
 if __name__ == "__main__":
