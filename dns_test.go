@@ -1,6 +1,7 @@
 package main
 
 import(
+	"bytes"
 	"testing"
 	)
 
@@ -38,3 +39,25 @@ func TestHeaderPacking(t *testing.T) {
 	}
 }
 
+
+func TestLabelPacking(t *testing.T) {
+	label := "label"
+
+	// Pack into raw bytes
+	rawBytes := packLabel(label)
+	expected := []byte{ 5, 'l', 'a', 'b', 'e', 'l'}
+	if !bytes.Equal(rawBytes, expected) {
+		t.Error("Unexpected packed label: ", rawBytes)
+	}
+
+	// Deliberately append some additional text to the packed bytes, to
+	// ensure the unpacking logic only consumes the correct length
+	invalid := []byte("INVALID")
+	rawBytes = append(rawBytes, invalid...)
+
+	// Unpack back to a text string
+	unpackedLabel := unpackLabel(rawBytes)
+	if unpackedLabel != label {
+		t.Error("Unexpected unpacked label: ", unpackedLabel)
+	}
+}

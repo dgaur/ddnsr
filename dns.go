@@ -42,5 +42,38 @@ func UnpackHeader(rawBytes []byte) (Header, error) {
 	return header, err
 }
 
+
+//
+// Label manipulation
+//
+func packLabel(label string) []byte {
+	buffer := new(bytes.Buffer)
+	buffer.WriteByte(byte(len(label)))
+	buffer.WriteString(label)
+	return buffer.Bytes()
+}
+
+func unpackLabel(rawBytes []byte) string {
+	length := int(rawBytes[0])
+	return string(rawBytes[1:length+1])
+}
+
+
+//
+// Question section
+//
+type Question struct {
+	Name	[]byte
+	Type	uint16
+	Class	uint16
+}
+
+func (question Question) pack() ([]byte, error) {
+	buffer := new(bytes.Buffer)
+	binary.Write(buffer, binary.BigEndian, question)
+	return buffer.Bytes(), nil
+}
+
+
 func resolve(host string) {
 }
