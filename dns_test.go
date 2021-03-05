@@ -63,6 +63,35 @@ func TestLabelPacking(t *testing.T) {
 }
 
 
+func TestNamePacking(t *testing.T) {
+	testCases := []struct{
+		name			string
+		unpackedName	string
+		packedName		[]byte
+	}{
+		{ "a",      "a.com",      []byte{ 1, 'a', 3, 'c', 'o', 'm', 0 } },
+		{ "amazon", "amazon.com", []byte{ 6, 'a', 'm', 'a', 'z', 'o', 'n', 3, 'c', 'o', 'm', 0 } },
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			// Pack and verify the domain name
+			packedName := packName(test.unpackedName)
+			if !bytes.Equal(packedName, test.packedName) {
+				t.Error("Unexpected packed name: ", packedName, test.packedName)
+			}
+
+			// Unpack the labels and revalidate
+			unpackedName := unpackName(packedName)
+			if unpackedName != test.unpackedName {
+				t.Error("Unexpected unpacked name: ", unpackedName,
+					test.unpackedName)
+			}
+		})
+	}
+		
+}
+
 func TestNullLabel(t *testing.T) {
 	label := ""
 

@@ -46,20 +46,58 @@ func UnpackHeader(rawBytes []byte) (Header, error) {
 //
 // Label manipulation
 //
-type Label []byte
-
 const LabelMaxLength = 63
 
-func packLabel(label string) Label {
+func packLabel(label string) []byte {
 	buffer := new(bytes.Buffer)
 	buffer.WriteByte(byte(len(label)))
 	buffer.WriteString(label)
 	return buffer.Bytes()
 }
 
-func unpackLabel(label Label) string {
+func unpackLabel(label []byte) string {
 	length := int(label[0])
 	return string(label[1:length+1])
+}
+
+
+//
+// Domain names
+//
+const DomainNameMaxLength = 255
+
+func packName(name string) []byte {
+	// Break the domain name into individual labels
+	tokens := append(strings.Split(name, "."), "")
+
+	// Compute the individual labels
+	labels := [][]byte{}
+	for _, token := range tokens {
+		labels = append(labels, packLabel(token))
+	}
+
+	// Pack all of the labels into a single list of bytes
+	return bytes.Join(labels, []byte{})
+}
+
+func unpackName(domainName []byte) string {
+	tokens := []string{}
+	length := 0
+	for {
+		// Unpack the next label in the domain name
+		token := unpackLabel(domainName[length:])
+
+		// Collect the labels until the empty label
+		tokenLength := len(token)
+		if tokenLength > 0 {
+			tokens = append(tokens, token)
+			length += (tokenLength + 1) // Include the length byte
+		} else {
+			break
+		}
+	}
+
+	return strings.Join(tokens, ".")
 }
 
 
