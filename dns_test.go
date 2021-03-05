@@ -61,3 +61,21 @@ func TestLabelPacking(t *testing.T) {
 		t.Error("Unexpected unpacked label: ", unpackedLabel)
 	}
 }
+
+
+func TestNullLabel(t *testing.T) {
+	label := ""
+
+	// Pack into raw bytes
+	rawBytes := packLabel(label)
+	expected := []byte{ 0 }
+	if !bytes.Equal(rawBytes, expected) {
+		t.Error("Unexpected non-zero label: ", rawBytes)
+	}
+
+	// Unpack back to a text string
+	unpackedLabel := unpackLabel(rawBytes)
+	if unpackedLabel != label {
+		t.Error("Unexpected non-empty label: ", unpackedLabel)
+	}
+}

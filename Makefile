@@ -18,7 +18,7 @@ clean:
 
 .PHONY: test
 test:
-	@$(GO) test
+	@$(GO) test -v
 
 
 .PHONY: vet

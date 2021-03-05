@@ -46,16 +46,20 @@ func UnpackHeader(rawBytes []byte) (Header, error) {
 //
 // Label manipulation
 //
-func packLabel(label string) []byte {
+type Label []byte
+
+const LabelMaxLength = 63
+
+func packLabel(label string) Label {
 	buffer := new(bytes.Buffer)
 	buffer.WriteByte(byte(len(label)))
 	buffer.WriteString(label)
 	return buffer.Bytes()
 }
 
-func unpackLabel(rawBytes []byte) string {
-	length := int(rawBytes[0])
-	return string(rawBytes[1:length+1])
+func unpackLabel(label Label) string {
+	length := int(label[0])
+	return string(label[1:length+1])
 }
 
 
