@@ -40,29 +40,43 @@ func TestHeaderPacking(t *testing.T) {
 }
 
 
+//
+// Validate individual label packing/unpacking
+//
 func TestLabelPacking(t *testing.T) {
-	label := "label"
-
-	// Pack into raw bytes
-	rawBytes := packLabel(label)
-	expected := []byte{ 5, 'l', 'a', 'b', 'e', 'l'}
-	if !bytes.Equal(rawBytes, expected) {
-		t.Error("Unexpected packed label: ", rawBytes)
+	testCases := []struct{
+		name			string
+		unpackedLabel	string
+		packedLabel		[]byte
+	}{
+		{ "a",      "a",      []byte{ 1, 'a' } },
+		{ "amazon", "amazon", []byte{ 6, 'a', 'm', 'a', 'z', 'o', 'n' } },
+		{ "null",   "",       []byte{ 0 } },
 	}
 
-	// Deliberately append some additional text to the packed bytes, to
-	// ensure the unpacking logic only consumes the correct length
-	invalid := []byte("INVALID")
-	rawBytes = append(rawBytes, invalid...)
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			// Pack and verify the label
+			packedLabel := packLabel(test.unpackedLabel)
+			if !bytes.Equal(packedLabel, test.packedLabel) {
+				t.Error("Unexpected packed name: ", packedLabel,
+					test.packedLabel)
+			}
 
-	// Unpack back to a text string
-	unpackedLabel := unpackLabel(rawBytes)
-	if unpackedLabel != label {
-		t.Error("Unexpected unpacked label: ", unpackedLabel)
+			// Unpack the label and revalidate
+			unpackedLabel := unpackLabel(packedLabel)
+			if unpackedLabel != test.unpackedLabel {
+				t.Error("Unexpected unpacked name: ", unpackedLabel,
+					test.unpackedLabel)
+			}
+		})
 	}
 }
 
 
+//
+// Validate composite domain-name packing/unpacking
+//
 func TestNamePacking(t *testing.T) {
 	testCases := []struct{
 		name			string
@@ -92,19 +106,3 @@ func TestNamePacking(t *testing.T) {
 		
 }
 
-func TestNullLabel(t *testing.T) {
-	label := ""
-
-	// Pack into raw bytes
-	rawBytes := packLabel(label)
-	expected := []byte{ 0 }
-	if !bytes.Equal(rawBytes, expected) {
-		t.Error("Unexpected non-zero label: ", rawBytes)
-	}
-
-	// Unpack back to a text string
-	unpackedLabel := unpackLabel(rawBytes)
-	if unpackedLabel != label {
-		t.Error("Unexpected non-empty label: ", unpackedLabel)
-	}
-}

@@ -62,7 +62,7 @@ func unpackLabel(label []byte) string {
 
 
 //
-// Domain names
+// Domain name manipulation
 //
 const DomainNameMaxLength = 255
 
