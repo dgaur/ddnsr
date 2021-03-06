@@ -7,36 +7,37 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"strings"
 )
+
+func swap16(data16 uint16) uint16 {
+	return ((data16 & 0xFF00) >> 8) | ((data16 & 0xFF) << 8)
+}
 
 
 //
 // Message header
 //
-type Header struct {
-	Id					int16
-	Flags				int16
-	QuestionCount		int16
-	AnswerCount			int16
-	NameserverCount		int16
-	AdditionalCount		int16
+type MessageHeader struct {
+	Id					uint16
+	Flags				uint16
+	QuestionCount		uint16
+	AnswerCount			uint16
+	NameserverCount		uint16
+	AdditionalCount		uint16
 }
-const HeaderSize = 12 // 6 fields, 16b each
+const MessageHeaderSize = 12 // 6 fields, 16b each
 
-//
-// Pack header struct into a sequence of bytes.  No side effects.
-//
-func (header Header) pack() ([]byte, error) {
+const MessageHeaderFlagRecursionDesired = 0x0100
+
+func packMessageHeader(header MessageHeader) []byte {
 	buffer := new(bytes.Buffer)
 	binary.Write(buffer, binary.BigEndian, header)
-	return buffer.Bytes(), nil
+	return buffer.Bytes()
 }
 
-//
-// Unpack a sequence of bytes into header struct.  No side effects.
-//
-func UnpackHeader(rawBytes []byte) (Header, error) {
-	header := Header{}
+func unpackMessageHeader(rawBytes []byte) (MessageHeader, error) {
+	header := MessageHeader{}
 	reader := bytes.NewReader(rawBytes)
 	err := binary.Read(reader, binary.BigEndian, &header)
 	return header, err
@@ -44,7 +45,7 @@ func UnpackHeader(rawBytes []byte) (Header, error) {
 
 
 //
-// Label manipulation
+// Individual label manipulation
 //
 const LabelMaxLength = 63
 
@@ -62,7 +63,7 @@ func unpackLabel(label []byte) string {
 
 
 //
-// Domain name manipulation
+// Composite domain-name manipulation
 //
 const DomainNameMaxLength = 255
 
@@ -105,17 +106,50 @@ func unpackName(domainName []byte) string {
 // Question section
 //
 type Question struct {
-	Name	[]byte
+	Name	string
 	Type	uint16
 	Class	uint16
 }
 
-func (question Question) pack() ([]byte, error) {
+func packQuestion(question Question) []byte {
 	buffer := new(bytes.Buffer)
-	binary.Write(buffer, binary.BigEndian, question)
-	return buffer.Bytes(), nil
+	binary.Write(buffer, binary.BigEndian, packName(question.Name))
+	binary.Write(buffer, binary.BigEndian, question.Type)
+	binary.Write(buffer, binary.BigEndian, question.Class)
+	return buffer.Bytes()
 }
 
 
+//
+// Composite DNS request/response
+//
+type Message struct {
+	Header		MessageHeader
+	Questions	[]Question
+}
+
+func (message *Message) addQuestion(question Question) {
+	message.Header.QuestionCount++
+	message.Questions = append(message.Questions, question)
+}
+
+func packMessage(message Message) []byte {
+	buffer := new(bytes.Buffer)
+	binary.Write(buffer, binary.BigEndian, packMessageHeader(message.Header))
+	for _, question := range message.Questions {
+		binary.Write(buffer, binary.BigEndian, packQuestion(question))
+	}
+
+	return buffer.Bytes()
+}
+
+
+//
+// Main resolver logic
+//
 func resolve(host string) {
+	message := Message{}
+	message.Header.Id = 0xFEFF
+	message.Header.Flags |= MessageHeaderFlagRecursionDesired
+	message.addQuestion( Question{ host, 0, 0 } )
 }
