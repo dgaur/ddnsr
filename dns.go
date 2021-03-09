@@ -108,6 +108,9 @@ func unpackName(domainName []byte) string {
 //
 // Question section
 //
+const QuestionTypeA		= 1 //@these are really RR types and classes
+const QuestionClassIN	= 1
+
 type Question struct {
 	Name	string
 	Type	uint16
@@ -172,7 +175,7 @@ func resolve(host string) error {
 	request := Message{}
 	request.Header.Id = 0xFEFF
 	request.Header.Flags |= MessageHeaderFlagRecursionDesired
-	request.addQuestion( Question{ host, 0, 0 } )
+	request.addQuestion( Question{ host, QuestionTypeA, QuestionClassIN } )
 	requestBytes := packMessage(request)
 	dumpBytes(requestBytes)
 
