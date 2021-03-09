@@ -7,7 +7,10 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
+	"net"
 	"strings"
+	"time"
 )
 
 func swap16(data16 uint16) uint16 {
@@ -143,13 +146,52 @@ func packMessage(message Message) []byte {
 	return buffer.Bytes()
 }
 
+func dumpBytes(rawBytes []byte) {
+	fmt.Printf("Raw bytes: ")
+	for _, byte := range rawBytes {
+		fmt.Printf("%02x ", byte)
+	}
+	fmt.Printf("\n")
+}
 
 //
 // Main resolver logic
 //
-func resolve(host string) {
-	message := Message{}
-	message.Header.Id = 0xFEFF
-	message.Header.Flags |= MessageHeaderFlagRecursionDesired
-	message.addQuestion( Question{ host, 0, 0 } )
+const DnsPort = 53
+
+func resolve(host string) error {
+	// Locate the upstream DNS resolver
+	upstreamPort := net.UDPAddr{ net.ParseIP("8.8.8.8"), DnsPort, ""}
+	upstream, err := net.DialUDP("udp", nil, &upstreamPort)
+	if (err != nil) {
+		fmt.Println("Unable to reach upstream DNS server: ", err)
+		return err
+	}
+	defer upstream.Close()
+
+	request := Message{}
+	request.Header.Id = 0xFEFF
+	request.Header.Flags |= MessageHeaderFlagRecursionDesired
+	request.addQuestion( Question{ host, 0, 0 } )
+	requestBytes := packMessage(request)
+	dumpBytes(requestBytes)
+
+	// Send the actual DNS request
+	_, err = upstream.Write(requestBytes)
+	if err != nil {
+		fmt.Println("Unable to send DNS request: ", err)
+		return err
+	}
+
+	// Wait for a reply, if any
+	replyBytes := make([]byte, 1024)
+	upstream.SetReadDeadline(time.Now().Add(5 * time.Second))
+	length, err := upstream.Read(replyBytes)
+	if err != nil {
+		fmt.Println("Unable to read DNS response: ", err)
+		return err
+	}
+	dumpBytes(replyBytes[:length])
+
+	return err
 }
