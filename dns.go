@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -50,11 +51,11 @@ func packMessageHeader(header MessageHeader) []byte {
 	return buffer.Bytes()
 }
 
-func unpackMessageHeader(rawBytes []byte) (MessageHeader, error) {
+func unpackMessageHeader(rawBytes []byte) (MessageHeader, int, error) {
 	header := MessageHeader{}
 	reader := bytes.NewReader(rawBytes)
 	err := binary.Read(reader, binary.BigEndian, &header)
-	return header, err
+	return header, MessageHeaderSize, err
 }
 
 
@@ -70,9 +71,9 @@ func packLabel(label string) []byte {
 	return buffer.Bytes()
 }
 
-func unpackLabel(label []byte) string {
+func unpackLabel(label []byte) (string, int) {
 	length := int(label[0])
-	return string(label[1:length+1])
+	return string(label[1:length+1]), length
 }
 
 
@@ -95,15 +96,14 @@ func packName(name string) []byte {
 	return bytes.Join(labels, []byte{})
 }
 
-func unpackName(domainName []byte) string {
+func unpackName(domainName []byte) (string, int) {
 	tokens := []string{}
 	length := 0
 	for {
 		// Unpack the next label in the domain name
-		token := unpackLabel(domainName[length:])
+		token, tokenLength := unpackLabel(domainName[length:])
 
 		// Collect the labels until the empty label
-		tokenLength := len(token)
 		if tokenLength > 0 {
 			tokens = append(tokens, token)
 			length += (tokenLength + 1) // Include the length byte
@@ -112,7 +112,7 @@ func unpackName(domainName []byte) string {
 		}
 	}
 
-	return strings.Join(tokens, ".")
+	return strings.Join(tokens, "."), length
 }
 
 
@@ -143,33 +143,31 @@ func packQuestion(question Question) []byte {
 	return buffer.Bytes()
 }
 
-func unpackQuestion(rawBytes []byte) (Question, error) {
-	var err error
+func unpackQuestion(rawBytes []byte) (Question, int, error) {
+	var err error	= nil
+	var length int	= 0
+	var question	= Question{}
 
-	question := Question{}
-	question.Name = unpackName(rawBytes)
-
-	// Each length-byte in raw Name bytes corresponds to the "." in the
-	// resulting string, except for the trailing zero-byte.  So the length
-	// of the computed Name is the same as the length of the original
-	// byte-string, less the trailing zero-byte
-	nameLength := len(question.Name) + 1
+	// Parse the initial Name string, variable-length
+	question.Name, length = unpackName(rawBytes)
 
 	// Parse the fixed fields after the Name string
-	reader := bytes.NewReader(rawBytes[nameLength:])
+	reader := bytes.NewReader(rawBytes[length:])
 	err = binary.Read(reader, binary.BigEndian, &question.Type)
 	if (err != nil) {
 		fmt.Println("Unable to parse question type: ", err)
-		return Question{}, err
+		return Question{}, 0, err
 	}
-
+	length += int(reflect.TypeOf(question.Type).Size())
+	
 	err = binary.Read(reader, binary.BigEndian, &question.Class)
 	if (err != nil) {
 		fmt.Println("Unable to parse question class: ", err)
-		return Question{}, err
+		return Question{}, 0, err
 	}
+	length += int(reflect.TypeOf(question.Class).Size())
 
-	return question, err
+	return question, length, err
 }
 
 
@@ -179,9 +177,12 @@ func unpackQuestion(rawBytes []byte) (Question, error) {
 type ResourceRecord struct {
 }
 
-func unpackResourceRecord(rawBytes []byte) (ResourceRecord, error) {
-	rr := ResourceRecord{}
-	return rr, nil
+func unpackResourceRecord(rawBytes []byte) (ResourceRecord, int, error) {
+	var err error	= nil
+	var length int	= 0
+	var rr			= ResourceRecord{}
+	
+	return rr, length, err
 }
 
 //
@@ -206,7 +207,6 @@ func (message Message) dump() {
 	}
 }
 
-
 func packMessage(message Message) []byte {
 	buffer := new(bytes.Buffer)
 	binary.Write(buffer, binary.BigEndian, packMessageHeader(message.Header))
@@ -217,34 +217,34 @@ func packMessage(message Message) []byte {
 	return buffer.Bytes()
 }
 
-func unpackMessage(rawBytes []byte) (Message, error) {
-	var err error
-	message := Message{}
+func unpackMessage(rawBytes []byte) (Message, int, error) {
+	var err error	= nil
+	var length int	= 0
+	var message		= Message{}
 
 	// Message header is always present
-	message.Header, err = unpackMessageHeader(rawBytes)
+	message.Header, length, err = unpackMessageHeader(rawBytes)
 	if (err != nil) {
 		fmt.Println("Unable to unpack header: ", err)
-		return Message{}, err
+		return Message{}, 0, err
 	}
-
-	// Start parsing the variable-size fields after the header
-	offset := MessageHeaderSize
 
 	// Parse the Questions, if any
 	var q uint16 = 0
 	for (q < message.Header.QuestionCount) {
-		question, err := unpackQuestion(rawBytes[offset:])
+		question, questionLength, err := unpackQuestion(rawBytes[length:])
 		if (err != nil) {
-			fmt.Println("Unable to unpack message: ", err)
-			return Message{}, err
+			fmt.Println("Unable to unpack question: ", err)
+			return Message{}, 0, err
 		}
 		message.Questions = append(message.Questions, question)
-		//@only works once
+
+		// Continue parsing the next Question, if any
 		q++
+		length += questionLength
 	}
-	
-	return message, err
+
+	return message, length, err
 }
 
 func dumpBytes(rawBytes []byte) {
@@ -296,7 +296,7 @@ func resolve(host string) error {
 	}
 	dumpBytes(replyBytes[:length])
 
-	reply, err := unpackMessage(replyBytes)
+	reply, _, err := unpackMessage(replyBytes)
 	if (err != nil) {
 		fmt.Println("Unable to parse DNS response: ", err)
 		return err

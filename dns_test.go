@@ -29,7 +29,7 @@ func TestLabelPacking(t *testing.T) {
 			}
 
 			// Unpack the label and revalidate
-			unpackedLabel := unpackLabel(packedLabel)
+			unpackedLabel, _ := unpackLabel(packedLabel)
 			if unpackedLabel != test.unpackedLabel {
 				t.Error("Unexpected unpacked name: ", unpackedLabel,
 					test.unpackedLabel)
@@ -52,8 +52,8 @@ func TestMessageHeaderPacking(t *testing.T) {
 
 	// Unpack the bytes back into a new header and compare to the original.
 	// Expect the two headers to be identical
-	header2, err := unpackMessageHeader(rawBytes)
-	if err != nil {
+	header2, _, err := unpackMessageHeader(rawBytes)
+	if (err != nil) {
 		t.Error("Unpacking error: ", err)
 	}
 	if (header1.Id != header2.Id) {
@@ -106,7 +106,7 @@ func TestNamePacking(t *testing.T) {
 			}
 
 			// Unpack the labels and revalidate
-			unpackedName := unpackName(packedName)
+			unpackedName, _ := unpackName(packedName)
 			if unpackedName != test.unpackedName {
 				t.Error("Unexpected unpacked name: ", unpackedName,
 					test.unpackedName)
@@ -126,7 +126,7 @@ func TestQuestionPacking(t *testing.T) {
 
 	// Unpack the bytes back into a new Question and compare to the original.
 	// Expect the two Questions to be identical
-	question2, err := unpackQuestion(packedQuestion)
+	question2, _, err := unpackQuestion(packedQuestion)
 	if err != nil {
 		t.Error("Unpacking error: ", err)
 	}
