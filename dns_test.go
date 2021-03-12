@@ -2,6 +2,7 @@ package main
 
 import(
 	"bytes"
+	"fmt"
 	"testing"
 	)
 
@@ -75,12 +76,29 @@ func TestMessageHeaderPacking(t *testing.T) {
 // Validate full message packing
 //
 func TestMessagePacking(t *testing.T) {
-	message := Message{}
-	message.Header.Id = 0xFEFF
-	message.Header.Flags |= MessageHeaderFlagRecursionDesired
-	message.addQuestion( Question{ "a.com", 0, 0 } )
-	rawBytes := packMessage(message)
-	t.Log("packed message: ", rawBytes)
+	// Pack a trivial message into bytes
+	message1 := Message{}
+	message1.Header.Id = 0xFEFF
+	message1.Header.Flags |= MessageHeaderFlagRecursionDesired
+	message1.addQuestion( Question{ "a.com", 0, 0 } )
+	rawBytes := packMessage(message1)
+
+	// Unpack the bytes back into a new message and revalidate
+	message2, _, err := unpackMessage(rawBytes)
+	if (err != nil) {
+		t.Error("Unpacking error: ", err)
+	}
+	if (message1.Header.Id != message2.Header.Id) {
+		t.Error("Id mismatch")
+	}
+	if (message1.Questions[0].Name != message2.Questions[0].Name) {
+		t.Error("Name mismatch")
+	}
+
+	friendlyText := fmt.Sprintf("%s", message2)
+	if (len(friendlyText) < 8) {
+		t.Error("String conversion is probably wrong: ", friendlyText)
+	}
 }
 
 
