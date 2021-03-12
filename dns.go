@@ -14,13 +14,9 @@ import (
 	"time"
 )
 
-func swap16(data16 uint16) uint16 {
-	return ((data16 & 0xFF00) >> 8) | ((data16 & 0xFF) << 8)
-}
-
 
 //
-// Message header
+// DNS message header
 //
 type MessageHeader struct {
 	Id					uint16
@@ -109,8 +105,8 @@ func unpackName(domainName []byte) (string, int) {
 		// Unpack the next label in the domain name
 		token, tokenLength := unpackLabel(domainName[length:])
 
-		// Collect the labels until the empty label
-		if tokenLength > 0 {
+		// Collect the labels until the empty/zero-length label
+		if (tokenLength > 0) {
 			tokens = append(tokens, token)
 			length += (tokenLength + 1) // Include the length byte
 		} else {
@@ -119,6 +115,7 @@ func unpackName(domainName []byte) (string, int) {
 		}
 	}
 
+	// Assemble the individual labels into a full, dotted DNS name 
 	return strings.Join(tokens, "."), length
 }
 
@@ -197,7 +194,7 @@ func unpackResourceRecord(rawBytes []byte) (ResourceRecord, int, error) {
 }
 
 //
-// Composite DNS request/response
+// Composite DNS request/response messages
 //
 type Message struct {
 	Header		MessageHeader
@@ -205,6 +202,8 @@ type Message struct {
 }
 
 func (message *Message) addQuestion(question Question) {
+	// Add a new Question to a Request message, mostly useful for coordinating
+	// changes to both the header and payload
 	message.Header.QuestionCount++
 	message.Questions = append(message.Questions, question)
 }
@@ -282,7 +281,7 @@ func resolve(host string) error {
 	}
 	defer upstream.Close()
 
-	// Create the DNS request
+	// Create the initial DNS request
 	request := Message{}
 	request.Header.Id = 0xFEFF
 	request.Header.Flags |= MessageHeaderFlagRecursionDesired
@@ -307,6 +306,7 @@ func resolve(host string) error {
 	}
 	dumpBytes(replyBytes[:length])
 
+	// Parse the reply
 	reply, _, err := unpackMessage(replyBytes)
 	if (err != nil) {
 		fmt.Println("Unable to parse DNS response: ", err)
