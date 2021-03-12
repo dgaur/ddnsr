@@ -33,6 +33,17 @@ const MessageHeaderSize = 12 // 6 fields, 16b each
 
 const MessageHeaderFlagRecursionDesired = 0x0100
 
+func (header MessageHeader) dump() {
+	fmt.Printf("Header:\n")
+	fmt.Printf("   Id:           %#04x\n", header.Id)
+	fmt.Printf("   Flags:        %#04x\n", header.Flags)
+	fmt.Printf("   Questions:    %d\n", header.QuestionCount)
+	fmt.Printf("   Answers:      %d\n", header.AnswerCount)
+	fmt.Printf("   Nameservers:  %d\n", header.NameserverCount)
+	fmt.Printf("   AdditionalRR: %d\n", header.AdditionalCount)
+	return
+}
+
 func packMessageHeader(header MessageHeader) []byte {
 	buffer := new(bytes.Buffer)
 	binary.Write(buffer, binary.BigEndian, header)
@@ -117,6 +128,13 @@ type Question struct {
 	Class	uint16
 }
 
+func (question Question) dump() {
+	fmt.Printf("Question:\n")
+	fmt.Printf("   Name:         %s\n", question.Name)
+	fmt.Printf("   Type:         %#02x\n", question.Type)
+	fmt.Printf("   Class:        %#02x\n", question.Class)
+}
+
 func packQuestion(question Question) []byte {
 	buffer := new(bytes.Buffer)
 	binary.Write(buffer, binary.BigEndian, packName(question.Name))
@@ -125,6 +143,46 @@ func packQuestion(question Question) []byte {
 	return buffer.Bytes()
 }
 
+func unpackQuestion(rawBytes []byte) (Question, error) {
+	var err error
+
+	question := Question{}
+	question.Name = unpackName(rawBytes)
+
+	// Each length-byte in raw Name bytes corresponds to the "." in the
+	// resulting string, except for the trailing zero-byte.  So the length
+	// of the computed Name is the same as the length of the original
+	// byte-string, less the trailing zero-byte
+	nameLength := len(question.Name) + 1
+
+	// Parse the fixed fields after the Name string
+	reader := bytes.NewReader(rawBytes[nameLength:])
+	err = binary.Read(reader, binary.BigEndian, &question.Type)
+	if (err != nil) {
+		fmt.Println("Unable to parse question type: ", err)
+		return Question{}, err
+	}
+
+	err = binary.Read(reader, binary.BigEndian, &question.Class)
+	if (err != nil) {
+		fmt.Println("Unable to parse question class: ", err)
+		return Question{}, err
+	}
+
+	return question, err
+}
+
+
+//
+// Resource records (RR)
+//
+type ResourceRecord struct {
+}
+
+func unpackResourceRecord(rawBytes []byte) (ResourceRecord, error) {
+	rr := ResourceRecord{}
+	return rr, nil
+}
 
 //
 // Composite DNS request/response
@@ -139,6 +197,16 @@ func (message *Message) addQuestion(question Question) {
 	message.Questions = append(message.Questions, question)
 }
 
+func (message Message) dump() {
+	message.Header.dump()
+	var q uint16 = 0
+	for (q < message.Header.QuestionCount) {
+		message.Questions[q].dump()
+		q++
+	}
+}
+
+
 func packMessage(message Message) []byte {
 	buffer := new(bytes.Buffer)
 	binary.Write(buffer, binary.BigEndian, packMessageHeader(message.Header))
@@ -149,6 +217,36 @@ func packMessage(message Message) []byte {
 	return buffer.Bytes()
 }
 
+func unpackMessage(rawBytes []byte) (Message, error) {
+	var err error
+	message := Message{}
+
+	// Message header is always present
+	message.Header, err = unpackMessageHeader(rawBytes)
+	if (err != nil) {
+		fmt.Println("Unable to unpack header: ", err)
+		return Message{}, err
+	}
+
+	// Start parsing the variable-size fields after the header
+	offset := MessageHeaderSize
+
+	// Parse the Questions, if any
+	var q uint16 = 0
+	for (q < message.Header.QuestionCount) {
+		question, err := unpackQuestion(rawBytes[offset:])
+		if (err != nil) {
+			fmt.Println("Unable to unpack message: ", err)
+			return Message{}, err
+		}
+		message.Questions = append(message.Questions, question)
+		//@only works once
+		q++
+	}
+	
+	return message, err
+}
+
 func dumpBytes(rawBytes []byte) {
 	fmt.Printf("Raw bytes: ")
 	for _, byte := range rawBytes {
@@ -156,6 +254,7 @@ func dumpBytes(rawBytes []byte) {
 	}
 	fmt.Printf("\n")
 }
+
 
 //
 // Main resolver logic
@@ -172,6 +271,7 @@ func resolve(host string) error {
 	}
 	defer upstream.Close()
 
+	// Create the DNS request
 	request := Message{}
 	request.Header.Id = 0xFEFF
 	request.Header.Flags |= MessageHeaderFlagRecursionDesired
@@ -181,7 +281,7 @@ func resolve(host string) error {
 
 	// Send the actual DNS request
 	_, err = upstream.Write(requestBytes)
-	if err != nil {
+	if (err != nil) {
 		fmt.Println("Unable to send DNS request: ", err)
 		return err
 	}
@@ -195,6 +295,13 @@ func resolve(host string) error {
 		return err
 	}
 	dumpBytes(replyBytes[:length])
+
+	reply, err := unpackMessage(replyBytes)
+	if (err != nil) {
+		fmt.Println("Unable to parse DNS response: ", err)
+		return err
+	}
+	reply.dump()
 
 	return err
 }
