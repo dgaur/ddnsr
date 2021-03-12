@@ -34,15 +34,21 @@ const MessageHeaderSize = 12 // 6 fields, 16b each
 
 const MessageHeaderFlagRecursionDesired = 0x0100
 
-func (header MessageHeader) dump() {
-	fmt.Printf("Header:\n")
-	fmt.Printf("   Id:           %#04x\n", header.Id)
-	fmt.Printf("   Flags:        %#04x\n", header.Flags)
-	fmt.Printf("   Questions:    %d\n", header.QuestionCount)
-	fmt.Printf("   Answers:      %d\n", header.AnswerCount)
-	fmt.Printf("   Nameservers:  %d\n", header.NameserverCount)
-	fmt.Printf("   AdditionalRR: %d\n", header.AdditionalCount)
-	return
+func (header MessageHeader) String() string {
+	return fmt.Sprintf(
+    `Header:
+    Id:            %#04x
+    Flags:         %#04x
+    Questions:     %d
+    Answers:       %d
+    Nameservers:   %d
+    Additional RR: %d`,
+	header.Id,
+	header.Flags,
+	header.QuestionCount,
+	header.AnswerCount,
+	header.NameserverCount,
+	header.AdditionalCount)
 }
 
 func packMessageHeader(header MessageHeader) []byte {
@@ -128,11 +134,15 @@ type Question struct {
 	Class	uint16
 }
 
-func (question Question) dump() {
-	fmt.Printf("Question:\n")
-	fmt.Printf("   Name:         %s\n", question.Name)
-	fmt.Printf("   Type:         %#02x\n", question.Type)
-	fmt.Printf("   Class:        %#02x\n", question.Class)
+func (question Question) String() string {
+	return fmt.Sprintf(
+	`Question:
+    Name:          %s
+    Type:          %#02x
+    Class:         %#02x`,
+	question.Name,
+	question.Type,
+	question.Class)
 }
 
 func packQuestion(question Question) []byte {
@@ -198,13 +208,13 @@ func (message *Message) addQuestion(question Question) {
 	message.Questions = append(message.Questions, question)
 }
 
-func (message Message) dump() {
-	message.Header.dump()
-	var q uint16 = 0
-	for (q < message.Header.QuestionCount) {
-		message.Questions[q].dump()
-		q++
+func (message Message) String() string {
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "%s\n", message.Header)
+	for _, q := range message.Questions {
+		fmt.Fprintf(&builder, "%s\n", q)
 	}
+	return builder.String()
 }
 
 func packMessage(message Message) []byte {
@@ -301,7 +311,7 @@ func resolve(host string) error {
 		fmt.Println("Unable to parse DNS response: ", err)
 		return err
 	}
-	reply.dump()
+	fmt.Println(reply)
 
 	return err
 }
