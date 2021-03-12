@@ -114,6 +114,7 @@ func unpackName(domainName []byte) (string, int) {
 			tokens = append(tokens, token)
 			length += (tokenLength + 1) // Include the length byte
 		} else {
+			length++ // Account for the trailing zero-byte
 			break
 		}
 	}

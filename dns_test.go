@@ -135,18 +135,26 @@ func TestNamePacking(t *testing.T) {
 }
 
 
+//
+// Validate Question packing + unpacking
+//
 func TestQuestionPacking(t *testing.T) {
-	question1 := Question{ "a.com", 0, 0 }
+	question1 := Question{ "abcdefghijklmnopqrstuvwxyz.com", 0, 0 }
+	
 	packedQuestion := packQuestion(question1)
-	if len(packedQuestion) != ((1+1+1+3+1) + 2 + 2) {
+	expectedLength := (1+26+1+3+1) + 2 + 2
+	if (len(packedQuestion) != expectedLength) {
 		t.Error("Unexpected packed question length: ", len(packedQuestion))
 	}
 
 	// Unpack the bytes back into a new Question and compare to the original.
 	// Expect the two Questions to be identical
-	question2, _, err := unpackQuestion(packedQuestion)
+	question2, unpackedLength, err := unpackQuestion(packedQuestion)
 	if err != nil {
 		t.Error("Unpacking error: ", err)
+	}
+	if (unpackedLength != expectedLength) {
+		t.Error("Length mismatch during unpacking: ", unpackedLength)
 	}
 	if (question1.Name != question2.Name) {
 		t.Error("Name mismatch")
