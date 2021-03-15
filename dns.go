@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -28,7 +29,12 @@ type MessageHeader struct {
 }
 const MessageHeaderSize = 12 // 6 fields, 16b each
 
-const MessageHeaderFlagRecursionDesired = 0x0100
+const MessageHeaderFlagResponse				= 0x8000
+const MessageHeaderFlagAuthoritative		= 0x0400
+const MessageHeaderFlagTruncation			= 0x0200
+const MessageHeaderFlagRecursionDesired		= 0x0100
+const MessageHeaderFlagRecursionAvailable	= 0x0080
+const MessageHeaderFlagReponseCodeMask		= 0x000F
 
 func (header MessageHeader) String() string {
 	return fmt.Sprintf(
@@ -115,7 +121,7 @@ func unpackName(domainName []byte) (string, int) {
 		}
 	}
 
-	// Assemble the individual labels into a full, dotted DNS name 
+	// Assemble the individual labels into a full, dotted DNS name
 	return strings.Join(tokens, "."), length
 }
 
@@ -167,7 +173,7 @@ func unpackQuestion(rawBytes []byte) (Question, int, error) {
 		return Question{}, 0, err
 	}
 	length += int(reflect.TypeOf(question.Type).Size())
-	
+
 	err = binary.Read(reader, binary.BigEndian, &question.Class)
 	if (err != nil) {
 		fmt.Println("Unable to parse question class: ", err)
@@ -189,7 +195,7 @@ func unpackResourceRecord(rawBytes []byte) (ResourceRecord, int, error) {
 	var err error	= nil
 	var length int	= 0
 	var rr			= ResourceRecord{}
-	
+
 	return rr, length, err
 }
 
@@ -215,6 +221,29 @@ func (message Message) String() string {
 		fmt.Fprintf(&builder, "%s\n", q)
 	}
 	return builder.String()
+}
+
+func (reply Message) Validate(request Message) error {
+	// Expect the request/response ids to match
+	if (reply.Header.Id != request.Header.Id) {
+		return(errors.New("Header id mismatch"))
+	}
+
+	// Expect a response message
+	if (reply.Header.Flags & MessageHeaderFlagResponse == 0) {
+		return(errors.New("Expected DNS response"))
+	}
+
+	// Abort on a truncated message, for simplicity
+	if (reply.Header.Flags & MessageHeaderFlagTruncation ==
+		MessageHeaderFlagTruncation) {
+		return(errors.New("DNS response truncated"))
+	}
+
+	// Here, the reply itself appears to be valid.  It may contain an
+	// error message or unexpected RR, etc, but the message itself appears
+	// to be well-formed, etc
+	return(nil)
 }
 
 func packMessage(message Message) []byte {
@@ -306,10 +335,15 @@ func resolve(host string) error {
 	}
 	dumpBytes(replyBytes[:length])
 
-	// Parse the reply
+	// Parse + validate the reply
 	reply, _, err := unpackMessage(replyBytes)
 	if (err != nil) {
 		fmt.Println("Unable to parse DNS response: ", err)
+		return err
+	}
+	err = reply.Validate(request)
+	if (err != nil) {
+		fmt.Println("Invalid DNS response: ", err)
 		return err
 	}
 	fmt.Println(reply)
