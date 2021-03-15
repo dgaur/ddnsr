@@ -34,7 +34,7 @@ const MessageHeaderFlagAuthoritative		= 0x0400
 const MessageHeaderFlagTruncation			= 0x0200
 const MessageHeaderFlagRecursionDesired		= 0x0100
 const MessageHeaderFlagRecursionAvailable	= 0x0080
-const MessageHeaderFlagReponseCodeMask		= 0x000F
+const MessageHeaderFlagResponseCodeMask		= 0x000F
 
 func (header MessageHeader) String() string {
 	// Expand flag fields into human-friendly codes
@@ -53,6 +53,9 @@ func (header MessageHeader) String() string {
 	}
 	if (header.Flags & MessageHeaderFlagRecursionAvailable != 0) {
 		flags = append(flags, "RA")
+	}
+	if (header.Flags & MessageHeaderFlagResponseCodeMask != 0) {
+		flags = append(flags, "RCODE-ERROR")
 	}
 
 	return fmt.Sprintf(
@@ -142,6 +145,14 @@ func unpackName(domainName []byte) (string, int) {
 // Question section
 //
 const QuestionTypeA		= 1 //@these are really RR types and classes
+const QuestionTypeNS	= 2
+const QuestionTypeCNAME	= 5
+const QuestionTypeSOA	= 6
+const QuestionTypePTR	= 12
+const QuestionTypeMX	= 15
+const QuestionTypeTXT	= 16
+const QuestionTypeALL	= 255
+
 const QuestionClassIN	= 1
 
 type Question struct {
@@ -151,14 +162,19 @@ type Question struct {
 }
 
 func (question Question) String() string {
-	return fmt.Sprintf(
-	`Question:
-    Name:          %s
-    Type:          %#02x
-    Class:         %#02x`,
-	question.Name,
-	question.Type,
-	question.Class)
+	var qtype string
+	switch (question.Type) {
+		case QuestionTypeA:		qtype = "A"
+		case QuestionTypeNS:	qtype = "NS"
+		case QuestionTypeCNAME:	qtype = "CNAME"
+		case QuestionTypeSOA:	qtype = "SOA"
+		case QuestionTypePTR:	qtype = "PTR"
+		case QuestionTypeMX:	qtype = "MX"
+		case QuestionTypeTXT:	qtype = "TXT"
+		default:				qtype = fmt.Sprintf("%d", int(question.Type))
+	}
+	
+	return fmt.Sprintf("Question: %s (%s)", question.Name, qtype)
 }
 
 func packQuestion(question Question) []byte {
@@ -235,7 +251,7 @@ func (message Message) String() string {
 	return builder.String()
 }
 
-func (reply Message) Validate(request Message) error {
+func (reply Message) validate(request Message) error {
 	// Expect the request/response ids to match
 	if (reply.Header.Id != request.Header.Id) {
 		return(errors.New("Header id mismatch"))
@@ -352,7 +368,7 @@ func resolve(host string) error {
 		fmt.Println("Unable to parse DNS response: ", err)
 		return err
 	}
-	err = reply.Validate(request)
+	err = reply.validate(request)
 	if (err != nil) {
 		fmt.Println("Invalid DNS response: ", err)
 		return err
