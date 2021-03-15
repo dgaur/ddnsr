@@ -37,16 +37,35 @@ const MessageHeaderFlagRecursionAvailable	= 0x0080
 const MessageHeaderFlagReponseCodeMask		= 0x000F
 
 func (header MessageHeader) String() string {
+	// Expand flag fields into human-friendly codes
+	var flags []string
+	if (header.Flags & MessageHeaderFlagResponse != 0) {
+		flags = append(flags, "QR")
+	}
+	if (header.Flags & MessageHeaderFlagAuthoritative != 0) {
+		flags = append(flags, "AA")
+	}
+	if (header.Flags & MessageHeaderFlagTruncation != 0) {
+		flags = append(flags, "TC")
+	}
+	if (header.Flags & MessageHeaderFlagRecursionDesired != 0) {
+		flags = append(flags, "RD")
+	}
+	if (header.Flags & MessageHeaderFlagRecursionAvailable != 0) {
+		flags = append(flags, "RA")
+	}
+
 	return fmt.Sprintf(
     `Header:
     Id:            %#04x
-    Flags:         %#04x
+    Flags:         %#04x (%s)
     Questions:     %d
     Answers:       %d
     Nameservers:   %d
     Additional RR: %d`,
 	header.Id,
 	header.Flags,
+	strings.Join(flags, " "),
 	header.QuestionCount,
 	header.AnswerCount,
 	header.NameserverCount,
@@ -235,8 +254,7 @@ func (reply Message) Validate(request Message) error {
 	}
 
 	// Abort on a truncated message, for simplicity
-	if (reply.Header.Flags & MessageHeaderFlagTruncation ==
-		MessageHeaderFlagTruncation) {
+	if (reply.Header.Flags & MessageHeaderFlagTruncation != 0) {
 		return(errors.New("DNS response truncated"))
 	}
 
