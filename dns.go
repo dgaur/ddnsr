@@ -56,14 +56,7 @@ func (header MessageHeader) String() string {
 	}
 
 	return fmt.Sprintf(
-    `Header:
-    Id:            %#04x
-    Flags:         %#04x (%s)
-    Questions:     %d
-    Answers:       %d
-    Nameservers:   %d
-    Additional RR: %d`,
-	header.Id,
+    "Header: flags %#04x (%s), QD %d, AN %d, NS %d, AR %d",
 	header.Flags,
 	strings.Join(flags, " "),
 	header.QuestionCount,
