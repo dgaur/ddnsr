@@ -7,40 +7,6 @@ import(
 	)
 
 //
-// Validate individual label packing/unpacking
-//
-func TestLabelPacking(t *testing.T) {
-	testCases := []struct{
-		name			string
-		unpackedLabel	string
-		packedLabel		[]byte
-	}{
-		{ "a",      "a",      []byte{ 1, 'a' } },
-		{ "amazon", "amazon", []byte{ 6, 'a', 'm', 'a', 'z', 'o', 'n' } },
-		{ "null",   "",       []byte{ 0 } },
-	}
-
-	for _, test := range testCases {
-		t.Run(test.name, func(t *testing.T) {
-			// Pack and verify the label
-			packedLabel := packLabel(test.unpackedLabel)
-			if !bytes.Equal(packedLabel, test.packedLabel) {
-				t.Error("Unexpected packed name: ", packedLabel,
-					test.packedLabel)
-			}
-
-			// Unpack the label and revalidate
-			unpackedLabel, _ := unpackLabel(packedLabel)
-			if unpackedLabel != test.unpackedLabel {
-				t.Error("Unexpected unpacked name: ", unpackedLabel,
-					test.unpackedLabel)
-			}
-		})
-	}
-}
-
-
-//
 // Validate header packing + unpacking
 //
 func TestMessageHeaderPacking(t *testing.T) {
@@ -53,7 +19,7 @@ func TestMessageHeaderPacking(t *testing.T) {
 
 	// Unpack the bytes back into a new header and compare to the original.
 	// Expect the two headers to be identical
-	header2, _, err := unpackMessageHeader(rawBytes)
+	header2, _, err := unpackMessageHeader(rawBytes, 0)
 	if (err != nil) {
 		t.Error("Unpacking error: ", err)
 	}
@@ -103,6 +69,26 @@ func TestMessagePacking(t *testing.T) {
 
 
 //
+// Validate unpacking/parsing of compressed names
+//
+func TestNameCompression(t *testing.T) {
+	rawBytes := []byte{ 5, 'l', 'a', 'b', 'e', 'l',
+						3, 'c', 'o', 'm',
+						0,
+						10, 'c', 'o', 'm', 'p', 'r', 'e', 's', 's', 'e', 'd',
+						0xC0, 0 }
+
+	unpackedName, length := unpackName(rawBytes, 11)
+	if unpackedName != "compressed.label.com" {
+		t.Error("Unexpected unpacked name: ", unpackedName)
+	}
+	if length != (1+10+2) {
+		t.Error("Unexpected length: ", length)
+	}
+}
+
+
+//
 // Validate composite domain-name packing/unpacking
 //
 func TestNamePacking(t *testing.T) {
@@ -124,7 +110,7 @@ func TestNamePacking(t *testing.T) {
 			}
 
 			// Unpack the labels and revalidate
-			unpackedName, _ := unpackName(packedName)
+			unpackedName, _ := unpackName(packedName, 0)
 			if unpackedName != test.unpackedName {
 				t.Error("Unexpected unpacked name: ", unpackedName,
 					test.unpackedName)
@@ -141,7 +127,7 @@ func TestNamePacking(t *testing.T) {
 func TestResourceRecordPacking(t *testing.T) {
 	rr1 := ResourceRecord{ "abcdefghijklmnopqrstuvwxyz.com", 0, 0, 128, 4,
 		[]byte("1234") }
-	
+
 	packedRR := packResourceRecord(rr1)
 	expectedLength := (1+26+1+3+1) + 2 + 2 + 4 + 2 + 4
 	if (len(packedRR) != expectedLength) {
@@ -150,7 +136,7 @@ func TestResourceRecordPacking(t *testing.T) {
 
 	// Unpack the bytes back into a new RR and compare to the original.
 	// Expect the two RR to be identical
-	rr2, unpackedLength, err := unpackResourceRecord(packedRR)
+	rr2, unpackedLength, err := unpackResourceRecord(packedRR, 0)
 	if err != nil {
 		t.Error("Unpacking error: ", err)
 	}
@@ -182,7 +168,7 @@ func TestResourceRecordPacking(t *testing.T) {
 //
 func TestQuestionPacking(t *testing.T) {
 	question1 := Question{ "abcdefghijklmnopqrstuvwxyz.com", 0, 0 }
-	
+
 	packedQuestion := packQuestion(question1)
 	expectedLength := (1+26+1+3+1) + 2 + 2
 	if (len(packedQuestion) != expectedLength) {
@@ -191,7 +177,7 @@ func TestQuestionPacking(t *testing.T) {
 
 	// Unpack the bytes back into a new Question and compare to the original.
 	// Expect the two Questions to be identical
-	question2, unpackedLength, err := unpackQuestion(packedQuestion)
+	question2, unpackedLength, err := unpackQuestion(packedQuestion, 0)
 	if err != nil {
 		t.Error("Unpacking error: ", err)
 	}

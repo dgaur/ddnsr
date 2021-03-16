@@ -74,7 +74,7 @@ func packMessageHeader(header MessageHeader) []byte {
 	return buffer.Bytes()
 }
 
-func unpackMessageHeader(rawBytes []byte) (MessageHeader, int, error) {
+func unpackMessageHeader(rawBytes []byte, offset int) (MessageHeader, int, error) {
 	header := MessageHeader{}
 	reader := bytes.NewReader(rawBytes)
 	err := binary.Read(reader, binary.BigEndian, &header)
@@ -83,61 +83,66 @@ func unpackMessageHeader(rawBytes []byte) (MessageHeader, int, error) {
 
 
 //
-// Individual label manipulation
-//
-const LabelMaxLength = 63
-
-func packLabel(label string) []byte {
-	buffer := new(bytes.Buffer)
-	buffer.WriteByte(byte(len(label)))
-	buffer.WriteString(label)
-	return buffer.Bytes()
-}
-
-func unpackLabel(label []byte) (string, int) {
-	length := int(label[0])
-	return string(label[1:length+1]), length
-}
-
-
-//
 // Composite domain-name manipulation
 //
-const DomainNameMaxLength = 255
+const DomainNameMaxLength	= 255
+const LabelMaxLength		= 63
 
 func packName(name string) []byte {
 	// Break the domain name into individual labels
-	tokens := append(strings.Split(name, "."), "")
+	labels := append(strings.Split(name, "."), "")
 
-	// Compute the individual labels
-	labels := [][]byte{}
-	for _, token := range tokens {
-		labels = append(labels, packLabel(token))
+	// Pack the individual labels into a continuous byte sequence
+	buffer := new(bytes.Buffer)
+	for _, label := range labels {
+		buffer.WriteByte(byte(len(label)))
+		buffer.WriteString(label)
 	}
 
 	// Pack all of the labels into a single list of bytes
-	return bytes.Join(labels, []byte{})
+	return buffer.Bytes()
 }
 
-func unpackName(domainName []byte) (string, int) {
-	tokens := []string{}
-	length := 0
-	for {
-		// Unpack the next label in the domain name
-		token, tokenLength := unpackLabel(domainName[length:])
+func unpackName(rawBytes []byte, offset int) (string, int) {
+	compressed	:= false
+	labels		:= []string{}
+	length		:= 0
 
-		// Collect the labels until the empty/zero-length label
-		if (tokenLength > 0) {
-			tokens = append(tokens, token)
-			length += (tokenLength + 1) // Include the length byte
-		} else {
-			length++ // Account for the trailing zero-byte
+	for {
+		labelLength := int(rawBytes[offset:][0])
+		if (labelLength > LabelMaxLength) {
+			// This is a compressed label.  The pointer consumes 2 bytes,
+			// but no more bytes at this offset
+			if (!compressed) {
+				length += 2 // 2 offset bytes
+			}
+			compressed = true
+
+			// Jump to the new offset and continue unpacking from there
+			offset = int(binary.BigEndian.Uint16(rawBytes[offset:offset+2]))-0xC000
+			continue
+		} else if (labelLength == 0) {
+			// Zero-length label.  This is the end of the domain name.
+			if (!compressed) {
+				length++ // Account for the trailing zero-byte
+			}
 			break
+		} else {
+			// Otherwise, this is a normal, inline label.  Not compressed.  Just
+			// read the label directly
+			label := string(rawBytes[offset+1:offset+labelLength+1])
+			labels = append(labels, label)
+
+			// Continue reading the next label
+			offset += labelLength+1
+			if (!compressed) {
+				length += (labelLength + 1) // Include the length byte
+			}
 		}
 	}
 
 	// Assemble the individual labels into a full, dotted DNS name
-	return strings.Join(tokens, "."), length
+	return strings.Join(labels, "."), length
 }
 
 
@@ -173,7 +178,7 @@ func (question Question) String() string {
 		case QuestionTypeTXT:	qtype = "TXT"
 		default:				qtype = fmt.Sprintf("%d", int(question.Type))
 	}
-	
+
 	return fmt.Sprintf("Question: %s (%s)", question.Name, qtype)
 }
 
@@ -185,16 +190,16 @@ func packQuestion(question Question) []byte {
 	return buffer.Bytes()
 }
 
-func unpackQuestion(rawBytes []byte) (Question, int, error) {
+func unpackQuestion(rawBytes []byte, offset int) (Question, int, error) {
 	var err error	= nil
 	var length int	= 0
 	var question	= Question{}
 
 	// Parse the initial Name string, variable-length
-	question.Name, length = unpackName(rawBytes)
+	question.Name, length = unpackName(rawBytes, offset)
 
 	// Parse the fixed fields after the Name string
-	reader := bytes.NewReader(rawBytes[length:])
+	reader := bytes.NewReader(rawBytes[offset+length:])
 	err = binary.Read(reader, binary.BigEndian, &question.Type)
 	if (err != nil) {
 		fmt.Println("Unable to parse question type: ", err)
@@ -225,6 +230,22 @@ type ResourceRecord struct {
 	RData		[]byte
 }
 
+func (rr ResourceRecord) String() string {
+	var rtype string
+	switch (rr.Type) {
+		case QuestionTypeA:		rtype = "A"
+		case QuestionTypeNS:	rtype = "NS"
+		case QuestionTypeCNAME:	rtype = "CNAME"
+		case QuestionTypeSOA:	rtype = "SOA"
+		case QuestionTypePTR:	rtype = "PTR"
+		case QuestionTypeMX:	rtype = "MX"
+		case QuestionTypeTXT:	rtype = "TXT"
+		default:				rtype = fmt.Sprintf("%d", int(rr.Type))
+	}
+
+	return fmt.Sprintf("RR:     %s (%s), TTL %d", rr.Name, rtype, rr.TTL)
+}
+
 func packResourceRecord(rr ResourceRecord) []byte {
 	buffer := new(bytes.Buffer)
 	binary.Write(buffer, binary.BigEndian, packName(rr.Name))
@@ -236,16 +257,16 @@ func packResourceRecord(rr ResourceRecord) []byte {
 	return buffer.Bytes()
 }
 
-func unpackResourceRecord(rawBytes []byte) (ResourceRecord, int, error) {
+func unpackResourceRecord(rawBytes []byte, offset int) (ResourceRecord, int, error) {
 	var err error	= nil
 	var length int	= 0
 	var rr			= ResourceRecord{}
 
 	// Parse the initial Name string, variable-length
-	rr.Name, length = unpackName(rawBytes)
+	rr.Name, length = unpackName(rawBytes, offset)
 
 	// RR type
-	reader := bytes.NewReader(rawBytes[length:])
+	reader := bytes.NewReader(rawBytes[offset+length:])
 	err = binary.Read(reader, binary.BigEndian, &rr.Type)
 	if (err != nil) {
 		fmt.Println("Unable to parse RR type: ", err)
@@ -285,7 +306,7 @@ func unpackResourceRecord(rawBytes []byte) (ResourceRecord, int, error) {
 		return ResourceRecord{}, 0, err
 	}
 	length += int(rr.RDLength)
-	
+
 	return rr, length, err
 }
 
@@ -295,6 +316,7 @@ func unpackResourceRecord(rawBytes []byte) (ResourceRecord, int, error) {
 type Message struct {
 	Header		MessageHeader
 	Questions	[]Question
+	Answers		[]ResourceRecord
 }
 
 func (message *Message) addQuestion(question Question) {
@@ -309,6 +331,9 @@ func (message Message) String() string {
 	fmt.Fprintf(&builder, "%s\n", message.Header)
 	for _, q := range message.Questions {
 		fmt.Fprintf(&builder, "%s\n", q)
+	}
+	for _, a := range message.Answers {
+		fmt.Fprintf(&builder, "%s\n", a)
 	}
 	return builder.String()
 }
@@ -351,16 +376,15 @@ func unpackMessage(rawBytes []byte) (Message, int, error) {
 	var message		= Message{}
 
 	// Message header is always present
-	message.Header, length, err = unpackMessageHeader(rawBytes)
+	message.Header, length, err = unpackMessageHeader(rawBytes, 0)
 	if (err != nil) {
 		fmt.Println("Unable to unpack header: ", err)
 		return Message{}, 0, err
 	}
 
 	// Parse the Questions, if any
-	var q uint16 = 0
-	for (q < message.Header.QuestionCount) {
-		question, questionLength, err := unpackQuestion(rawBytes[length:])
+	for q := 0; q < int(message.Header.QuestionCount); q++ {
+		question, questionLength, err := unpackQuestion(rawBytes, length)
 		if (err != nil) {
 			fmt.Println("Unable to unpack question: ", err)
 			return Message{}, 0, err
@@ -368,8 +392,20 @@ func unpackMessage(rawBytes []byte) (Message, int, error) {
 		message.Questions = append(message.Questions, question)
 
 		// Continue parsing the next Question, if any
-		q++
 		length += questionLength
+	}
+
+	// Parse the Answers, if any
+	for r := 0; r < int(message.Header.AnswerCount); r++ {
+		answer, answerLength, err := unpackResourceRecord(rawBytes, length)
+		if (err != nil) {
+			fmt.Println("Unable to unpack answer: ", err)
+			return Message{}, 0, err
+		}
+		message.Answers = append(message.Answers, answer)
+
+		// Continue parsing the next Answer, if any
+		length += answerLength
 	}
 
 	return message, length, err
