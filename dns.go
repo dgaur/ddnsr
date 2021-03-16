@@ -217,6 +217,23 @@ func unpackQuestion(rawBytes []byte) (Question, int, error) {
 // Resource records (RR)
 //
 type ResourceRecord struct {
+	Name		string
+	Type		uint16
+	Class		uint16
+	TTL			int32
+	RDLength	uint16
+	RData		[]byte
+}
+
+func packResourceRecord(rr ResourceRecord) []byte {
+	buffer := new(bytes.Buffer)
+	binary.Write(buffer, binary.BigEndian, packName(rr.Name))
+	binary.Write(buffer, binary.BigEndian, rr.Type)
+	binary.Write(buffer, binary.BigEndian, rr.Class)
+	binary.Write(buffer, binary.BigEndian, rr.TTL)
+	binary.Write(buffer, binary.BigEndian, rr.RDLength)
+	binary.Write(buffer, binary.BigEndian, rr.RData)
+	return buffer.Bytes()
 }
 
 func unpackResourceRecord(rawBytes []byte) (ResourceRecord, int, error) {
@@ -224,6 +241,51 @@ func unpackResourceRecord(rawBytes []byte) (ResourceRecord, int, error) {
 	var length int	= 0
 	var rr			= ResourceRecord{}
 
+	// Parse the initial Name string, variable-length
+	rr.Name, length = unpackName(rawBytes)
+
+	// RR type
+	reader := bytes.NewReader(rawBytes[length:])
+	err = binary.Read(reader, binary.BigEndian, &rr.Type)
+	if (err != nil) {
+		fmt.Println("Unable to parse RR type: ", err)
+		return ResourceRecord{}, 0, err
+	}
+	length += int(reflect.TypeOf(rr.Type).Size())
+
+	// RR class
+	err = binary.Read(reader, binary.BigEndian, &rr.Class)
+	if (err != nil) {
+		fmt.Println("Unable to parse RR class: ", err)
+		return ResourceRecord{}, 0, err
+	}
+	length += int(reflect.TypeOf(rr.Class).Size())
+
+	// RR TTL
+	err = binary.Read(reader, binary.BigEndian, &rr.TTL)
+	if (err != nil) {
+		fmt.Println("Unable to parse RR TTL: ", err)
+		return ResourceRecord{}, 0, err
+	}
+	length += int(reflect.TypeOf(rr.TTL).Size())
+
+	// RR RDLength (payload length)
+	err = binary.Read(reader, binary.BigEndian, &rr.RDLength)
+	if (err != nil) {
+		fmt.Println("Unable to parse RR RDLENGTH: ", err)
+		return ResourceRecord{}, 0, err
+	}
+	length += int(reflect.TypeOf(rr.RDLength).Size())
+
+	// RR RDLength (payload), variable-length
+	rr.RData = make([]byte, rr.RDLength)
+	err = binary.Read(reader, binary.BigEndian, &rr.RData)
+	if (err != nil) {
+		fmt.Println("Unable to parse RR RDATA: ", err)
+		return ResourceRecord{}, 0, err
+	}
+	length += int(rr.RDLength)
+	
 	return rr, length, err
 }
 

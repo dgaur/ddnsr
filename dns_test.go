@@ -136,6 +136,48 @@ func TestNamePacking(t *testing.T) {
 
 
 //
+// Validate RR packing + unpacking
+//
+func TestResourceRecordPacking(t *testing.T) {
+	rr1 := ResourceRecord{ "abcdefghijklmnopqrstuvwxyz.com", 0, 0, 128, 4,
+		[]byte("1234") }
+	
+	packedRR := packResourceRecord(rr1)
+	expectedLength := (1+26+1+3+1) + 2 + 2 + 4 + 2 + 4
+	if (len(packedRR) != expectedLength) {
+		t.Error("Unexpected packed RR length: ", len(packedRR))
+	}
+
+	// Unpack the bytes back into a new RR and compare to the original.
+	// Expect the two RR to be identical
+	rr2, unpackedLength, err := unpackResourceRecord(packedRR)
+	if err != nil {
+		t.Error("Unpacking error: ", err)
+	}
+	if (unpackedLength != expectedLength) {
+		t.Error("Length mismatch during unpacking: ", unpackedLength)
+	}
+	if (rr1.Name != rr2.Name) {
+		t.Error("Name mismatch")
+	}
+	if (rr1.Type != rr2.Type) {
+		t.Error("Type mismatch")
+	}
+	if (rr1.Class != rr2.Class) {
+		t.Error("Class mismatch")
+	}
+	if (rr1.TTL != rr2.TTL) {
+		t.Error("TTL mismatch")
+	}
+	if (rr1.RDLength != rr2.RDLength) {
+		t.Error("TTL mismatch")
+	}
+	if !bytes.Equal(rr1.RData, rr2.RData) {
+		t.Error("Unexpected packed data: ", rr1.RData, rr2.RData)
+	}
+}
+
+//
 // Validate Question packing + unpacking
 //
 func TestQuestionPacking(t *testing.T) {
