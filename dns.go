@@ -231,19 +231,31 @@ type ResourceRecord struct {
 }
 
 func (rr ResourceRecord) String() string {
+	var rdata string
 	var rtype string
 	switch (rr.Type) {
-		case QuestionTypeA:		rtype = "A"
-		case QuestionTypeNS:	rtype = "NS"
-		case QuestionTypeCNAME:	rtype = "CNAME"
-		case QuestionTypeSOA:	rtype = "SOA"
-		case QuestionTypePTR:	rtype = "PTR"
-		case QuestionTypeMX:	rtype = "MX"
-		case QuestionTypeTXT:	rtype = "TXT"
-		default:				rtype = fmt.Sprintf("%d", int(rr.Type))
+		case QuestionTypeA:
+			rtype = "A"
+			rdata = fmt.Sprintf("%d.%d.%d.%d",
+				rr.RData[0], rr.RData[1], rr.RData[3], rr.RData[3])
+		case QuestionTypeNS:
+			rtype = "NS"
+		case QuestionTypeCNAME:
+			rtype = "CNAME"
+		case QuestionTypeSOA:
+			rtype = "SOA"
+		case QuestionTypePTR:
+			rtype = "PTR"
+		case QuestionTypeMX:
+			rtype = "MX"
+		case QuestionTypeTXT:
+			rtype = "TXT"
+			rdata = string(rr.RData)
+		default:
+			rtype = fmt.Sprintf("%d", int(rr.Type))
 	}
 
-	return fmt.Sprintf("RR:     %s (%s), TTL %d", rr.Name, rtype, rr.TTL)
+	return fmt.Sprintf("RR:     %s (%s), TTL %d, rdata %s", rr.Name, rtype, rr.TTL, rdata)
 }
 
 func packResourceRecord(rr ResourceRecord) []byte {
