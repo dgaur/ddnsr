@@ -7,7 +7,7 @@ response.
 ```
 Usage: ./ddnsr [options] hostname1 hostname2 ...
   -server string
-    	Upstream DNS server (default "1.1.1.1")
+    	IP address of upstream DNS server (default "1.1.1.1")
   -timeout uint
     	Request timeout, in seconds (default 3)
 ```

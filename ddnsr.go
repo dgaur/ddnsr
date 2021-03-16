@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
 	"os"
 )
 
@@ -15,7 +16,8 @@ func initializeConfig() ClientConfig {
 	var config = ClientConfig{}
 
 	// Describe all flags
-	flag.StringVar(&config.server, "server", "1.1.1.1", "Upstream DNS server")
+	flag.StringVar(&config.server, "server", "1.1.1.1",
+		"IP address of upstream DNS server")
 	flag.UintVar(&config.timeout, "timeout", 3, "Request timeout, in seconds")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(),
@@ -24,9 +26,14 @@ func initializeConfig() ClientConfig {
 		os.Exit(1)
 	}
 
-	// Parse any command-line arguments
+	// Parse + validate any command-line arguments
 	flag.Parse()
 	if (flag.NArg() == 0) {
+		flag.Usage()
+	}
+	if (net.ParseIP(config.server) == nil) {
+		fmt.Fprintf(flag.CommandLine.Output(),
+			"Invalid DNS server: %s\n", config.server)
 		flag.Usage()
 	}
 
