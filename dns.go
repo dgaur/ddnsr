@@ -437,9 +437,9 @@ func dumpBytes(rawBytes []byte) {
 //
 const DnsPort = 53
 
-func resolve(host string) error {
+func resolve(config ClientConfig, host string) error {
 	// Locate the upstream DNS resolver
-	upstreamPort := net.UDPAddr{ net.ParseIP("8.8.8.8"), DnsPort, ""}
+	upstreamPort := net.UDPAddr{ net.ParseIP(config.server), DnsPort, ""}
 	upstream, err := net.DialUDP("udp", nil, &upstreamPort)
 	if (err != nil) {
 		fmt.Println("Unable to reach upstream DNS server: ", err)
@@ -464,7 +464,8 @@ func resolve(host string) error {
 
 	// Wait for a reply, if any
 	replyBytes := make([]byte, 1024)
-	upstream.SetReadDeadline(time.Now().Add(5 * time.Second))
+	timeout := time.Duration(config.timeout) * time.Second
+	upstream.SetReadDeadline(time.Now().Add(timeout))
 	length, err := upstream.Read(replyBytes)
 	if err != nil {
 		fmt.Println("Unable to read DNS response: ", err)
