@@ -8,6 +8,7 @@ import (
 )
 
 type ClientConfig struct {
+	recursive	bool
 	server		string
 	timeout		uint
 }
@@ -16,6 +17,7 @@ func initializeConfig() ClientConfig {
 	var config = ClientConfig{}
 
 	// Describe all flags
+	flag.BoolVar(&config.recursive, "recursive", true, "Recursive DNS query?")
 	flag.StringVar(&config.server, "server", "1.1.1.1",
 		"IP address of upstream DNS server")
 	flag.UintVar(&config.timeout, "timeout", 3, "Request timeout, in seconds")

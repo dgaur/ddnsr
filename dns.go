@@ -450,7 +450,9 @@ func resolve(config ClientConfig, host string) error {
 	// Create the initial DNS request
 	request := Message{}
 	request.Header.Id = 0xFEFF
-	request.Header.Flags |= MessageHeaderFlagRecursionDesired
+	if (config.recursive) {
+		request.Header.Flags |= MessageHeaderFlagRecursionDesired
+	}
 	request.addQuestion( Question{ host, QuestionTypeA, QuestionClassIN } )
 	requestBytes := packMessage(request)
 	dumpBytes(requestBytes)

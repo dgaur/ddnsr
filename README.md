@@ -6,6 +6,8 @@ response.
 
 ```
 Usage: ./ddnsr [options] hostname1 hostname2 ...
+  -recursive
+    	Recursive DNS query? (default true)
   -server string
     	IP address of upstream DNS server (default "1.1.1.1")
   -timeout uint
