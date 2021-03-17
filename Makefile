@@ -1,8 +1,12 @@
+#
+# Makefile for the ddnsr build
+#
 
-DDNSR := ddnsr
-
+# Assume the 'go' tools are available in the PATH if not explicitly overridden
 GO ?= go
 
+# The CLI tool is the only artifact
+DDNSR := ddnsr
 
 all: $(DDNSR)
 
