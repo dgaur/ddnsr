@@ -326,9 +326,11 @@ func unpackResourceRecord(rawBytes []byte, offset int) (ResourceRecord, int, err
 // Composite DNS request/response messages
 //
 type Message struct {
-	Header		MessageHeader
-	Questions	[]Question
-	Answers		[]ResourceRecord
+	Header			MessageHeader
+	Questions		[]Question
+	Answers			[]ResourceRecord
+	Nameservers		[]ResourceRecord
+	AdditionalRR	[]ResourceRecord
 }
 
 func (message *Message) addQuestion(question Question) {
@@ -346,6 +348,12 @@ func (message Message) String() string {
 	}
 	for _, a := range message.Answers {
 		fmt.Fprintf(&builder, "%s\n", a)
+	}
+	for _, ns := range message.Nameservers {
+		fmt.Fprintf(&builder, "%s\n", ns)
+	}
+	for _, rr := range message.AdditionalRR {
+		fmt.Fprintf(&builder, "%s\n", rr)
 	}
 	return builder.String()
 }
@@ -407,20 +415,48 @@ func unpackMessage(rawBytes []byte) (Message, int, error) {
 		length += questionLength
 	}
 
-	// Parse the Answers, if any
-	for r := 0; r < int(message.Header.AnswerCount); r++ {
-		answer, answerLength, err := unpackResourceRecord(rawBytes, length)
-		if (err != nil) {
-			fmt.Println("Unable to unpack answer: ", err)
-			return Message{}, 0, err
-		}
-		message.Answers = append(message.Answers, answer)
+	// Helper function for unmarshalling the different RR sections.  Just
+	// collect all of the RR's embedded in an individual section
+	unpackRRSection := func(count int) ([]ResourceRecord, error) {
+		var records = []ResourceRecord{}
 
-		// Continue parsing the next Answer, if any
-		length += answerLength
+		for i := 0; i < count; i++ {
+			// Attempt to parse the next RR in this section
+			rr, rrLength, err := unpackResourceRecord(rawBytes, length)
+			if (err != nil) {
+				fmt.Println("Unable to unpack RR: ", err)
+				return records, err
+			}
+
+			// Collect all of the RR's in this section
+			records = append(records, rr)
+
+			// Resume parsing at the next RR, if any
+			length += rrLength
+		}
+
+		return records, nil
 	}
 
-	return message, length, err
+	// Parse the Answers, if any
+	message.Answers, err = unpackRRSection(int(message.Header.AnswerCount))
+	if (err != nil) {
+		return Message{}, 0, err
+	}
+
+	// Parse the Nameservers, if any
+	message.Nameservers, err = unpackRRSection(int(message.Header.NameserverCount))
+	if (err != nil) {
+		return Message{}, 0, err
+	}
+
+	// Parse the related RR's, if any
+	message.AdditionalRR, err = unpackRRSection(int(message.Header.AdditionalCount))
+	if (err != nil) {
+		return Message{}, 0, err
+	}
+
+	return message, length, nil
 }
 
 func dumpBytes(rawBytes []byte) {
