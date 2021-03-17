@@ -257,6 +257,17 @@ func (rr ResourceRecord) String() string {
 		case RecordTypeA:
 			rdata = fmt.Sprintf("%d.%d.%d.%d",
 				rr.RData[0], rr.RData[1], rr.RData[3], rr.RData[3])
+		case RecordTypeCNAME:
+			rdata, _ = unpackName(rr.RData, 0)
+		case RecordTypeMX:
+			rdata, _ = unpackName(rr.RData, 2)
+		case RecordTypePTR:
+			rdata, _ = unpackName(rr.RData, 0)
+		case RecordTypeSOA:
+			mname, mlen := unpackName(rr.RData, 0)
+			rname, _    := unpackName(rr.RData, mlen)
+			//@other fields here: serial, refresh, etc
+			rdata = fmt.Sprintf("mname %s, rname %s", mname, rname)
 		case RecordTypeTXT:
 			rdata = string(rr.RData)
 		default:
