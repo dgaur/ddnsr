@@ -475,7 +475,11 @@ const DnsPort = 53
 
 func resolve(config ClientConfig, host string) error {
 	// Locate the upstream DNS resolver
-	upstreamPort := net.UDPAddr{ net.ParseIP(config.server), DnsPort, ""}
+	upstreamPort := net.UDPAddr{
+		IP:		net.ParseIP(config.server),
+		Port:	DnsPort,
+		Zone:	"",
+	}
 	upstream, err := net.DialUDP("udp", nil, &upstreamPort)
 	if (err != nil) {
 		fmt.Println("Unable to reach upstream DNS server: ", err)
