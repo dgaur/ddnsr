@@ -59,7 +59,7 @@ func (header MessageHeader) String() string {
 	}
 
 	return fmt.Sprintf(
-    "Header: flags %#04x (%s), QD %d, AN %d, NS %d, AR %d",
+    "flags %#04x (%s), QD %d, AN %d, NS %d, AR %d",
 	header.Flags,
 	strings.Join(flags, " "),
 	header.QuestionCount,
@@ -194,7 +194,7 @@ func (question Question) String() string {
 		qtype = fmt.Sprintf("%d", int(question.Type))
 	}
 
-	return fmt.Sprintf("Question: %s (%s)", question.Name, qtype)
+	return fmt.Sprintf("%s (%s)", question.Name, qtype)
 }
 
 func packQuestion(question Question) []byte {
@@ -258,11 +258,12 @@ func (rr ResourceRecord) String() string {
 			rdata = fmt.Sprintf("%d.%d.%d.%d",
 				rr.RData[0], rr.RData[1], rr.RData[3], rr.RData[3])
 		case RecordTypeTXT:
-			rtype = "TXT"
 			rdata = string(rr.RData)
+		default:
+			rdata = fmt.Sprintf("rdata (%d bytes) %v", rr.RDLength, rr.RData)
 	}
 
-	return fmt.Sprintf("RR:     %s (%s), TTL %d, rdata %s",
+	return fmt.Sprintf("%s (%s), TTL %d: %s",
 		rr.Name, rtype, rr.TTL, rdata)
 }
 
@@ -350,18 +351,18 @@ func (message *Message) addQuestion(question Question) {
 
 func (message Message) String() string {
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "%s\n", message.Header)
+	fmt.Fprintf(&builder, "H:  %s\n", message.Header)
 	for _, q := range message.Questions {
-		fmt.Fprintf(&builder, "%s\n", q)
+		fmt.Fprintf(&builder, "Q:  %s\n", q)
 	}
 	for _, a := range message.Answers {
-		fmt.Fprintf(&builder, "%s\n", a)
+		fmt.Fprintf(&builder, "A:  %s\n", a)
 	}
 	for _, ns := range message.Nameservers {
-		fmt.Fprintf(&builder, "%s\n", ns)
+		fmt.Fprintf(&builder, "NS: %s\n", ns)
 	}
 	for _, rr := range message.AdditionalRR {
-		fmt.Fprintf(&builder, "%s\n", rr)
+		fmt.Fprintf(&builder, "RR: %s\n", rr)
 	}
 	return builder.String()
 }
@@ -531,7 +532,7 @@ func resolve(config ClientConfig, host string) error {
 		return err
 	}
 	if (config.raw) {
-		dumpBytes("Raw request bytes", replyBytes[:length])
+		dumpBytes("Raw reply bytes", replyBytes[:length])
 	}
 
 	// Parse + validate the reply
