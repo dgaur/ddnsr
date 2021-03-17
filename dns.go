@@ -147,19 +147,41 @@ func unpackName(rawBytes []byte, offset int) (string, int) {
 
 
 //
+// Common Question/Record types + constants.  Most of these are valid for
+// both Question + ResourceRecord types
+//
+const RecordTypeA		= 1 
+const RecordTypeNS		= 2
+const RecordTypeCNAME	= 5
+const RecordTypeSOA		= 6
+const RecordTypePTR		= 12
+const RecordTypeMX		= 15
+const RecordTypeTXT		= 16
+const RecordTypeALL		= 255
+
+const RecordClassIN		= 1
+
+var RecordTypeMapToType = map[string]uint16{
+		"A":		RecordTypeA,
+		"NS":		RecordTypeNS,
+		"CNAME":	RecordTypeCNAME,
+		"SOA":		RecordTypeSOA,
+		"PTR":		RecordTypePTR,
+		"MX":		RecordTypeMX,
+		"TXT":		RecordTypeTXT,
+		"ALL":		RecordTypeALL,
+	}
+var RecordTypeMapToString = map[uint16]string{}
+
+func init() {
+	for k, v := range RecordTypeMapToType {
+		RecordTypeMapToString[v] = k
+	}
+}
+
+//
 // Question section
 //
-const QuestionTypeA		= 1 //@these are really RR types and classes
-const QuestionTypeNS	= 2
-const QuestionTypeCNAME	= 5
-const QuestionTypeSOA	= 6
-const QuestionTypePTR	= 12
-const QuestionTypeMX	= 15
-const QuestionTypeTXT	= 16
-const QuestionTypeALL	= 255
-
-const QuestionClassIN	= 1
-
 type Question struct {
 	Name	string
 	Type	uint16
@@ -167,16 +189,9 @@ type Question struct {
 }
 
 func (question Question) String() string {
-	var qtype string
-	switch (question.Type) {
-		case QuestionTypeA:		qtype = "A"
-		case QuestionTypeNS:	qtype = "NS"
-		case QuestionTypeCNAME:	qtype = "CNAME"
-		case QuestionTypeSOA:	qtype = "SOA"
-		case QuestionTypePTR:	qtype = "PTR"
-		case QuestionTypeMX:	qtype = "MX"
-		case QuestionTypeTXT:	qtype = "TXT"
-		default:				qtype = fmt.Sprintf("%d", int(question.Type))
+	var qtype string = RecordTypeMapToString[question.Type]
+	if (qtype == "") {
+		qtype = fmt.Sprintf("%d", int(question.Type))
 	}
 
 	return fmt.Sprintf("Question: %s (%s)", question.Name, qtype)
@@ -232,30 +247,23 @@ type ResourceRecord struct {
 
 func (rr ResourceRecord) String() string {
 	var rdata string
-	var rtype string
-	switch (rr.Type) {
-		case QuestionTypeA:
-			rtype = "A"
-			rdata = fmt.Sprintf("%d.%d.%d.%d",
-				rr.RData[0], rr.RData[1], rr.RData[3], rr.RData[3])
-		case QuestionTypeNS:
-			rtype = "NS"
-		case QuestionTypeCNAME:
-			rtype = "CNAME"
-		case QuestionTypeSOA:
-			rtype = "SOA"
-		case QuestionTypePTR:
-			rtype = "PTR"
-		case QuestionTypeMX:
-			rtype = "MX"
-		case QuestionTypeTXT:
-			rtype = "TXT"
-			rdata = string(rr.RData)
-		default:
-			rtype = fmt.Sprintf("%d", int(rr.Type))
+	var rtype string = RecordTypeMapToString[rr.Type]
+	if (rtype == "") {
+		rtype = fmt.Sprintf("%d", int(rr.Type))
 	}
 
-	return fmt.Sprintf("RR:     %s (%s), TTL %d, rdata %s", rr.Name, rtype, rr.TTL, rdata)
+	// Where possible, decode the actual record payload
+	switch (rr.Type) {
+		case RecordTypeA:
+			rdata = fmt.Sprintf("%d.%d.%d.%d",
+				rr.RData[0], rr.RData[1], rr.RData[3], rr.RData[3])
+		case RecordTypeTXT:
+			rtype = "TXT"
+			rdata = string(rr.RData)
+	}
+
+	return fmt.Sprintf("RR:     %s (%s), TTL %d, rdata %s",
+		rr.Name, rtype, rr.TTL, rdata)
 }
 
 func packResourceRecord(rr ResourceRecord) []byte {
@@ -459,8 +467,8 @@ func unpackMessage(rawBytes []byte) (Message, int, error) {
 	return message, length, nil
 }
 
-func dumpBytes(rawBytes []byte) {
-	fmt.Printf("Raw bytes: ")
+func dumpBytes(header string, rawBytes []byte) {
+	fmt.Printf("%s: ", header)
 	for _, byte := range rawBytes {
 		fmt.Printf("%02x ", byte)
 	}
@@ -487,15 +495,24 @@ func resolve(config ClientConfig, host string) error {
 	}
 	defer upstream.Close()
 
+	// Initialize the primitive DNS question for the upstream server
+	question := Question{
+		host,
+		RecordTypeMapToType[config.rtype],
+		RecordClassIN,
+	}
+
 	// Create the initial DNS request
 	request := Message{}
 	request.Header.Id = 0xFEFF
 	if (config.recursive) {
 		request.Header.Flags |= MessageHeaderFlagRecursionDesired
 	}
-	request.addQuestion( Question{ host, QuestionTypeA, QuestionClassIN } )
+	request.addQuestion(question)
 	requestBytes := packMessage(request)
-	dumpBytes(requestBytes)
+	if (config.raw) {
+		dumpBytes("Raw request bytes", requestBytes)
+	}
 
 	// Send the actual DNS request
 	_, err = upstream.Write(requestBytes)
@@ -513,7 +530,9 @@ func resolve(config ClientConfig, host string) error {
 		fmt.Println("Unable to read DNS response: ", err)
 		return err
 	}
-	dumpBytes(replyBytes[:length])
+	if (config.raw) {
+		dumpBytes("Raw request bytes", replyBytes[:length])
+	}
 
 	// Parse + validate the reply
 	reply, _, err := unpackMessage(replyBytes)

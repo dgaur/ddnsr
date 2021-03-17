@@ -8,16 +8,23 @@ import (
 )
 
 type ClientConfig struct {
+	raw			bool
 	recursive	bool
+	rtype		string
 	server		string
 	timeout		uint
 }
+
 
 func initializeConfig() ClientConfig {
 	var config = ClientConfig{}
 
 	// Describe all flags
-	flag.BoolVar(&config.recursive, "recursive", true, "Recursive DNS query?")
+	flag.BoolVar(&config.raw, "raw", false, "Show the raw packet bytes?")
+	flag.BoolVar(&config.recursive, "recursive", true,
+		"Send a recursive DNS query?")
+	flag.StringVar(&config.rtype, "rtype", "A",
+		"DNS record type (A, ALL, CNAME, MX, PTR, SOA, TXT, etc)")
 	flag.StringVar(&config.server, "server", "1.1.1.1",
 		"IP address of upstream DNS server")
 	flag.UintVar(&config.timeout, "timeout", 3, "Request timeout, in seconds")
@@ -36,6 +43,11 @@ func initializeConfig() ClientConfig {
 	if (net.ParseIP(config.server) == nil) {
 		fmt.Fprintf(flag.CommandLine.Output(),
 			"Invalid DNS server: %s\n", config.server)
+		flag.Usage()
+	}
+	if (RecordTypeMapToType[config.rtype] == 0) {
+		fmt.Fprintf(flag.CommandLine.Output(),
+			"Invalid record type: %s", config.rtype)
 		flag.Usage()
 	}
 
