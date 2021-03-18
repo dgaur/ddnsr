@@ -1,5 +1,5 @@
 //
-// DNS protocol + structures defined by RFC 1035 et al
+// DNS protocol + structures defined by RFC 1035, 3596, et al
 //
 
 package main
@@ -157,6 +157,7 @@ const RecordTypeSOA		= 6
 const RecordTypePTR		= 12
 const RecordTypeMX		= 15
 const RecordTypeTXT		= 16
+const RecordTypeAAAA	= 28
 const RecordTypeALL		= 255
 
 const RecordClassIN		= 1
@@ -169,6 +170,7 @@ var RecordTypeMapToType = map[string]uint16{
 		"PTR":		RecordTypePTR,
 		"MX":		RecordTypeMX,
 		"TXT":		RecordTypeTXT,
+		"AAAA":		RecordTypeAAAA,
 		"ALL":		RecordTypeALL,
 	}
 var RecordTypeMapToString = map[uint16]string{}
@@ -287,7 +289,7 @@ func (rr ResourceRecord) String() string {
 		case RecordTypeTXT:
 			rdata = string(rr.RData)
 		default:
-			rdata = fmt.Sprintf("rdata (%d bytes) %v", rr.RDLength, rr.RData)
+			rdata = fmt.Sprintf("rdata (%d bytes) % x", rr.RDLength, rr.RData)
 	}
 
 	return fmt.Sprintf("%s (%s), TTL %d: %s",
@@ -517,11 +519,7 @@ func unpackMessage(rawBytes []byte) (Message, int, error) {
 }
 
 func dumpBytes(header string, rawBytes []byte) {
-	fmt.Printf("%s: ", header)
-	for _, byte := range rawBytes {
-		fmt.Printf("%02x ", byte)
-	}
-	fmt.Printf("\n")
+	fmt.Printf("%s: % x\n", header, rawBytes)
 }
 
 
