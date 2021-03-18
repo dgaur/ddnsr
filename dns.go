@@ -55,7 +55,15 @@ func (header MessageHeader) String() string {
 		flags = append(flags, "RA")
 	}
 	if (header.Flags & MessageHeaderFlagResponseCodeMask != 0) {
-		flags = append(flags, "RCODE-ERROR")
+		var rcode string
+		switch (header.Flags & MessageHeaderFlagResponseCodeMask) {
+			case 1: rcode = "BAD-FORMAT"
+			case 2: rcode = "SERVER-ERROR"
+			case 3: rcode = "NXDOMAIN"
+			case 4: rcode = "NOT-IMPLEMENTED"
+			case 5: rcode = "REFUSED"
+		}
+		flags = append(flags, fmt.Sprintf("RCODE:%s", rcode))
 	}
 
 	return fmt.Sprintf(
