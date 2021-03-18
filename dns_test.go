@@ -125,8 +125,15 @@ func TestNamePacking(t *testing.T) {
 // Validate RR packing + unpacking
 //
 func TestResourceRecordPacking(t *testing.T) {
-	rr1 := ResourceRecord{ "abcdefghijklmnopqrstuvwxyz.com", 0, 0, 128, 4,
-		[]byte("1234") }
+	rr1 := ResourceRecord{
+		"abcdefghijklmnopqrstuvwxyz.com",
+		0,
+		0,
+		128,
+		4,
+		[]byte("1234"),
+		DecodedResourceRecord{},
+	}
 
 	packedRR := packResourceRecord(rr1)
 	expectedLength := (1+26+1+3+1) + 2 + 2 + 4 + 2 + 4

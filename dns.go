@@ -236,6 +236,19 @@ func unpackQuestion(rawBytes []byte, offset int) (Question, int, error) {
 //
 // Resource records (RR)
 //
+
+//@@@this is wrong: each of these RR types really should be a subclass/extension
+// of the main ResourceRecord struct.  For simplicity, just pack a few extra
+// fields here instead instead of complicating the surrounding code.
+type DecodedResourceRecord struct {
+	CNAME		string
+	MXExchange	string
+	PTR			string
+	NS			string
+	SOAMNAME	string
+	SOARNAME	string
+}
+
 type ResourceRecord struct {
 	Name		string
 	Type		uint16
@@ -243,7 +256,10 @@ type ResourceRecord struct {
 	TTL			int32
 	RDLength	uint16
 	RData		[]byte
+
+	Decoded		DecodedResourceRecord //@should really be subclassed
 }
+
 
 func (rr ResourceRecord) String() string {
 	var rdata string
@@ -257,6 +273,17 @@ func (rr ResourceRecord) String() string {
 		case RecordTypeA:
 			rdata = fmt.Sprintf("%d.%d.%d.%d",
 				rr.RData[0], rr.RData[1], rr.RData[3], rr.RData[3])
+		case RecordTypeCNAME:
+			rdata = rr.Decoded.CNAME
+		case RecordTypeMX:
+			rdata = rr.Decoded.MXExchange
+		case RecordTypeNS:
+			rdata = rr.Decoded.NS
+		case RecordTypePTR:
+			rdata = rr.Decoded.PTR
+		case RecordTypeSOA:
+			rdata = fmt.Sprintf("mname %s, rname %s",
+				rr.Decoded.SOAMNAME, rr.Decoded.SOARNAME)
 		case RecordTypeTXT:
 			rdata = string(rr.RData)
 		default:
@@ -326,6 +353,27 @@ func unpackResourceRecord(rawBytes []byte, offset int) (ResourceRecord, int, err
 		fmt.Println("Unable to parse RR RDATA: ", err)
 		return ResourceRecord{}, 0, err
 	}
+
+	// Where possible, unpack some of the unique fields here when the RData is
+	// readily available
+	//@this is incomplete: missing fields, and would be better as subclasses
+	switch (rr.Type) {
+		case RecordTypeCNAME:
+			rr.Decoded.CNAME, _ = unpackName(rawBytes, offset + length)
+		case RecordTypeMX:
+			rr.Decoded.MXExchange, _ = unpackName(rawBytes, offset + length + 2)
+		case RecordTypeNS:
+			rr.Decoded.NS, _    = unpackName(rawBytes, offset + length)
+		case RecordTypePTR:
+			rr.Decoded.PTR, _   = unpackName(rawBytes, offset + length)
+		case RecordTypeSOA:
+			var mlen int
+			rr.Decoded.SOAMNAME, mlen = unpackName(rawBytes, offset + length)
+			rr.Decoded.SOARNAME, _    = unpackName(rawBytes, offset + length + mlen)
+	}
+
+	// Include the payload bytes in the total, regardless of whether they
+	// were unpacked or not
 	length += int(rr.RDLength)
 
 	return rr, length, err
