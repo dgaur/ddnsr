@@ -1,5 +1,6 @@
 //
-// DNS protocol + structures defined by RFC 1035, 3596, et al
+// DNS protocol + structures defined by RFC 1035, 3596, et al.  No support
+// for EDNS (RFC 6891).
 //
 
 package main
