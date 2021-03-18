@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"reflect"
 	"strings"
@@ -560,7 +561,7 @@ func resolve(config ClientConfig, host string) error {
 
 	// Create the initial DNS request
 	request := Message{}
-	request.Header.Id = 0xFEFF
+	request.Header.Id = uint16(rand.Int31())
 	if (config.recursive) {
 		request.Header.Flags |= MessageHeaderFlagRecursionDesired
 	}
